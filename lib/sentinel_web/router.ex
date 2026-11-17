@@ -18,6 +18,12 @@ defmodule SentinelWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    live "/cameras", CameraLive, :index
+  end
+
+  # Same-origin HLS resources; they are binary media, not browser HTML.
+  scope "/hls", SentinelWeb do
+    get "/:camera_id/:quality/:filename", HlsController, :show
   end
 
   # Other scopes may use custom stacks.
