@@ -41,6 +41,12 @@ defmodule Sentinel.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.8.16"},
+      {:membrane_core, "~> 1.0"},
+      # Ratio's optional Decimal constraint predates Decimal 3. Keep Ecto's
+      # patched Decimal; interoperability is covered by dependency_compatibility_test.
+      {:decimal, "~> 3.1", override: true},
+      {:membrane_rtsp_plugin, "~> 0.7.0"},
+      {:membrane_http_adaptive_stream_plugin, "~> 0.21.3"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, ">= 0.0.0"},
@@ -66,7 +72,7 @@ defmodule Sentinel.MixProject do
        compile: false,
        depth: 1},
       {:swoosh, "~> 1.16"},
-      {:req, "~> 0.5"},
+      {:req, "~> 0.6.1"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 1.0"},

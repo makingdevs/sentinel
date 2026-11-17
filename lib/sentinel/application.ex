@@ -7,13 +7,17 @@ defmodule Sentinel.Application do
 
   @impl true
   def start(_type, _args) do
+    # Membrane debug/crash messages can include RTSP options. Redact origins
+    # before any logger handler receives them.
+    :logger.add_primary_filter(:sentinel_rtsp, {&Sentinel.Monitoring.LogFilter.filter/2, []})
+
     children = [
       SentinelWeb.Telemetry,
       Sentinel.Repo,
       {DNSCluster, query: Application.get_env(:sentinel, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Sentinel.PubSub},
-      # Start a worker by calling: Sentinel.Worker.start_link(arg)
-      # {Sentinel.Worker, arg},
+      {Registry, keys: :unique, name: Sentinel.Monitoring.Registry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Sentinel.Monitoring.Supervisor},
       # Start to serve requests, typically the last entry
       SentinelWeb.Endpoint
     ]

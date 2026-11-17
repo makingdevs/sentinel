@@ -66,6 +66,83 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Public camera identifiers and MediaMTX paths only; never DVR connection URLs.
+config :sentinel, :monitoring,
+  cameras: [
+    %{
+      id: "division-1",
+      branch: "División",
+      label: "Cámara 1",
+      paths: %{
+        "principal" => "division-canal-1-principal",
+        "secundaria" => "division-canal-1-secundario"
+      }
+    },
+    %{
+      id: "division-2",
+      branch: "División",
+      label: "Cámara 2",
+      paths: %{
+        "principal" => "division-canal-2-principal",
+        "secundaria" => "division-canal-2-secundario"
+      }
+    },
+    %{
+      id: "division-3",
+      branch: "División",
+      label: "Cámara 3",
+      paths: %{
+        "principal" => "division-canal-3-principal",
+        "secundaria" => "division-canal-3-secundario"
+      }
+    },
+    %{
+      id: "division-4",
+      branch: "División",
+      label: "Cámara 4",
+      paths: %{
+        "principal" => "division-canal-4-principal",
+        "secundaria" => "division-canal-4-secundario"
+      }
+    },
+    %{
+      id: "lavirgen-1",
+      branch: "La Virgen",
+      label: "Cámara 1",
+      paths: %{
+        "principal" => "lavirgen-canal-1-principal",
+        "secundaria" => "lavirgen-canal-1-secundario"
+      }
+    },
+    %{
+      id: "lavirgen-2",
+      branch: "La Virgen",
+      label: "Cámara 2",
+      paths: %{
+        "principal" => "lavirgen-canal-2-principal",
+        "secundaria" => "lavirgen-canal-2-secundario"
+      }
+    },
+    %{
+      id: "lavirgen-3",
+      branch: "La Virgen",
+      label: "Cámara 3",
+      paths: %{
+        "principal" => "lavirgen-canal-3-principal",
+        "secundaria" => "lavirgen-canal-3-secundario"
+      }
+    },
+    %{
+      id: "lavirgen-4",
+      branch: "La Virgen",
+      label: "Cámara 4",
+      paths: %{
+        "principal" => "lavirgen-canal-4-principal",
+        "secundaria" => "lavirgen-canal-4-secundario"
+      }
+    }
+  ]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
