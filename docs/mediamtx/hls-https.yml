@@ -1,0 +1,8 @@
+# Overlay: merge these keys into the EXISTING MediaMTX configuration.
+# Preserve paths, authentication, source settings, and the loopback-only API.
+# Check these options against the installed MediaMTX version before applying.
+hls: true
+hlsAddress: :8888
+hlsEncryption: true
+hlsServerCert: /etc/mediamtx/tls/fullchain.pem
+hlsServerKey: /etc/mediamtx/tls/privkey.pem

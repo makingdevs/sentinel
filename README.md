@@ -16,3 +16,9 @@ Ready to run in production? Please [check our deployment guides](https://phoenix
 * Docs: https://phoenix.hexdocs.pm
 * Forum: https://elixirforum.com/c/phoenix-forum
 * Source: https://github.com/phoenixframework/phoenix
+
+## Monitoreo de cámaras
+
+La cuadrícula `/cameras` usa RTSP → Membrane → HLS servido por Sentinel.
+Consulta [configuración, ejecución y límites](docs/monitoring.md).
+Instala el reproductor con `npm ci --prefix assets` antes de compilar assets.
