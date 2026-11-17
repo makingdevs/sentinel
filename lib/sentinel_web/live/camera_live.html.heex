@@ -1,0 +1,181 @@
+<Layouts.app flash={@flash} current_scope={@current_scope} wide>
+  <header class="mb-10 flex flex-wrap items-center justify-between gap-5 border-b border-white/10 pb-6">
+    <.link
+      navigate={~p"/cameras"}
+      class="flex items-center gap-3"
+      aria-label="Sentinel · Cámaras"
+    >
+      <span class="flex size-11 items-center justify-center rounded-xl bg-teal-400/10 text-teal-300 ring-1 ring-teal-300/20">
+        <.icon name="hero-viewfinder-circle" class="size-7" />
+      </span>
+      <span>
+        <span class="block text-lg font-semibold tracking-tight">Sentinel</span>
+        <span class="block text-xs tracking-wide text-slate-400">MONITOREO DE SUCURSALES</span>
+      </span>
+    </.link>
+    <span class="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-400">
+      División &amp; La Virgen
+    </span>
+  </header>
+
+  <section aria-labelledby="camera-heading">
+    <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-teal-300">
+          Tu espacio de observación
+        </p>
+        <h1 id="camera-heading" class="text-3xl font-semibold tracking-tight sm:text-4xl">
+          Cámaras
+        </h1>
+        <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+          Elige qué ver. Comienza en calidad secundaria y ajusta cada cámara cuando necesites más detalle.
+        </p>
+      </div>
+      <div class="flex items-center gap-4">
+        <span id="camera-count" aria-live="polite" class="text-sm tabular-nums text-slate-400">
+          <span class="font-semibold text-white">{@camera_count}</span> / 8 seleccionadas
+        </span>
+        <button
+          id="clear-cameras"
+          type="button"
+          phx-click="clear"
+          disabled={@camera_count == 0}
+          class="rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-teal-300 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          Limpiar todo
+        </button>
+      </div>
+    </div>
+
+    <.form
+      for={@form}
+      id="camera-selection-form"
+      phx-submit="add"
+      class="mb-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4 sm:flex-row sm:items-end sm:p-5"
+    >
+      <div class="min-w-0 flex-1 text-slate-200 [&_label]:text-slate-300">
+        <.input
+          field={@form[:camera_id]}
+          id="camera-select"
+          type="select"
+          label="Sucursal y cámara"
+          prompt="Selecciona una cámara…"
+          options={@camera_options}
+          required
+          class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-300 focus:ring-2 focus:ring-teal-300/20"
+        />
+      </div>
+      <button
+        id="add-camera"
+        type="submit"
+        disabled={@camera_count >= 8}
+        phx-disable-with="Agregando…"
+        class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-300 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <.icon name="hero-plus-small" class="size-5" /> Agregar cámara
+      </button>
+    </.form>
+
+    <div
+      id="camera-grid"
+      phx-update="stream"
+      class="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3"
+    >
+      <div
+        id="camera-empty"
+        class="col-span-full hidden min-h-80 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 px-6 py-16 text-center only:flex"
+      >
+        <span class="mb-5 flex size-16 items-center justify-center rounded-2xl bg-slate-900 text-slate-500 ring-1 ring-white/10">
+          <.icon name="hero-video-camera" class="size-8" />
+        </span>
+        <h2 class="text-lg font-medium text-slate-200">Una vista a tu medida</h2>
+        <p class="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+          Agrega una cámara de cualquier sucursal para comenzar. Puedes combinar hasta ocho en esta cuadrícula.
+        </p>
+      </div>
+
+      <article
+        :for={{dom_id, camera} <- @streams.cameras}
+        id={dom_id}
+        class="overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-lg shadow-black/10"
+      >
+        <div class="flex items-center justify-between gap-3 px-4 py-4">
+          <div>
+            <p class="text-xs text-teal-300">{camera.branch}</p>
+            <h2 class="mt-0.5 text-sm font-semibold">{camera.label}</h2>
+          </div>
+          <button
+            id={"remove-#{camera.id}"}
+            type="button"
+            phx-click="remove"
+            phx-value-id={camera.id}
+            aria-label={"Quitar #{camera.label} de #{camera.branch}"}
+            class="rounded-lg p-2 text-slate-500 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-teal-300"
+          >
+            <.icon name="hero-x-mark" class="size-5" />
+          </button>
+        </div>
+        <div
+          id={"player-#{camera.id}-#{camera.quality}-#{camera.generation}"}
+          phx-hook="HlsPlayer"
+          phx-update="ignore"
+          data-source={camera.url}
+          class="relative aspect-video bg-black"
+        >
+          <video
+            id={"video-#{camera.id}-#{camera.quality}-#{camera.generation}"}
+            aria-label={"#{camera.branch} · #{camera.label} · #{camera.quality}"}
+            autoplay
+            muted
+            playsinline
+            controls
+            class="h-full w-full"
+          ></video>
+          <p
+            data-player-status
+            role="status"
+            aria-live="polite"
+            class="pointer-events-none absolute inset-x-3 top-3 rounded-lg bg-black/70 px-3 py-2 text-xs text-slate-200"
+          >
+            Conectando con la cámara…
+          </p>
+        </div>
+        <div class="flex flex-wrap items-end justify-between gap-3 px-4 py-3">
+          <.form
+            for={camera.form}
+            id={"quality-#{camera.id}"}
+            phx-change="quality"
+            phx-value-id={camera.id}
+            class="text-slate-300 [&_label]:text-slate-400"
+          >
+            <.input
+              field={camera.form[:value]}
+              id={"quality-select-#{camera.id}"}
+              type="select"
+              label="Calidad"
+              options={[
+                {"Secundaria · menor consumo", "secundaria"},
+                {"Principal · más detalle", "principal"}
+              ]}
+              class="mt-1 block max-w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-teal-300"
+            />
+          </.form>
+          <button
+            id={"retry-#{camera.id}"}
+            type="button"
+            phx-click="retry"
+            phx-value-id={camera.id}
+            aria-label={"Reintentar #{camera.label} de #{camera.branch}"}
+            class="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs text-slate-400 transition hover:bg-white/5 hover:text-teal-300 focus-visible:outline-2 focus-visible:outline-teal-300"
+          >
+            <.icon name="hero-arrow-path" class="size-4" /> Reintentar
+          </button>
+        </div>
+      </article>
+    </div>
+    <p class="mt-6 text-xs leading-5 text-slate-500">
+      La reproducción puede tener varios segundos de retraso. El estado de conexión aparece sobre cada video.
+      La selección se conserva mientras permanezcas en esta página.
+    </p>
+  </section>
+</Layouts.app>

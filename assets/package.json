@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "dependencies": {
+    "hls.js": "1.6.19"
+  },
+  "scripts": {
+    "test": "node --test js/hooks/hls_player.test.mjs"
+  }
+}
