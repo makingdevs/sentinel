@@ -17,6 +17,12 @@ config :sentinel, :monitoring,
   sources: rtsp_sources,
   hls_directory: System.get_env("CAMERA_HLS_DIRECTORY", Path.expand("../tmp/hls", __DIR__))
 
+config :sentinel, :detection,
+  python: System.get_env("DETECTION_PYTHON", Path.expand("../.venv/bin/python", __DIR__)),
+  model_directory: System.get_env("DETECTION_MODEL_DIRECTORY", Path.expand("../models", __DIR__)),
+  worker_script:
+    System.get_env("DETECTION_WORKER_SCRIPT", Path.expand("../python/worker.py", __DIR__))
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

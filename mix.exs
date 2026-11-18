@@ -42,6 +42,15 @@ defmodule Sentinel.MixProject do
     [
       {:phoenix, "~> 1.8.16"},
       {:membrane_core, "~> 1.0"},
+      {:membrane_yolo_plugin, "~> 0.1.2"},
+      {:yolo, "~> 0.2.0"},
+      {:membrane_realtimer_plugin, "~> 0.11.1"},
+      {:membrane_h264_ffmpeg_plugin, "~> 0.32.8"},
+      {:membrane_h265_ffmpeg_plugin, "~> 0.4.3"},
+      {:image, "~> 0.54.4"},
+      {:nx, "~> 0.9.0"},
+      {:exla, "~> 0.9.0"},
+      {:membrane_ffmpeg_swscale_plugin, "~> 0.16.3"},
       # Ratio's optional Decimal constraint predates Decimal 3. Keep Ecto's
       # patched Decimal; interoperability is covered by dependency_compatibility_test.
       {:decimal, "~> 3.1", override: true},

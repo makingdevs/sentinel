@@ -1,0 +1,7 @@
+{
+  "model": "YOLO11n COCO",
+  "url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt",
+  "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+  "export": {"format": "onnx", "opset": 17, "imgsz": 640, "dynamic": false, "simplify": false, "nms": false},
+  "person_fixture": "https://raw.githubusercontent.com/ultralytics/assets/main/im/bus.jpg"
+}

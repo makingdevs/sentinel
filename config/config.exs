@@ -143,6 +143,9 @@ config :sentinel, :monitoring,
     }
   ]
 
+# Native CPU acceleration for bounded detector preprocessing and NMS.
+config :nx, default_backend: EXLA.Backend, default_defn_options: [compiler: EXLA]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
