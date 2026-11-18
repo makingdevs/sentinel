@@ -42,3 +42,22 @@ The preview pipeline and its HLS controls stay independent. Calibration UI is re
 - [x] Current Ecto/Phoenix docs for safe writes, pagination and LiveView updates
 - [x] Image/frame storage lifecycle, bounded async processing and failure behavior
 - [x] Tracking choice and limits for two detector backends
+
+## Extended research — 2026-11-17
+
+The user selected extensive research. Re-read detection Filter/Worker/LatestFrame/Drawer, Monitoring/Pipeline and catalog, Application, router, CameraLive, config, Mix aliases and sandbox helpers. Baseline `mix compile --warnings-as-errors` passes. There are no compound solution docs. No existing visitor modules or migrations. Mix requires escalation because Mix.PubSub opens a TCP socket.
+
+Current Context7: Ecto official HexDocs (unique conflict handling), LiveView v1.2.0 (reset paginated streams, ignored hook DOM), Membrane Core (sink EOS and flow control). Revisited SORT original paper and Image / GenServer official docs. Installed source is authoritative for Image 0.54 API, rather than latest online 0.73 docs.
+
+Implementation decisions:
+- Consume fresh inference results with the exact submitted RGB frame; never count replayed overlay boxes attached to subsequent frames. Keep only one inflight and one replaceable pending frame.
+- Include a crossing ordinal in dedupe identity; session/track/direction alone wrongly suppresses legitimate reentry in the same direction.
+- Use a finite line segment with signed normalized distance, hysteresis and minimum consecutive detections. Bound tracks and detections; report losses. A geometric greedy association is a baseline, not SORT or an identity guarantee.
+- Independent analytics pipeline ends at a sink, without encoder/HLS; session reset on reconnect. Existing preview worker limit is shared and can yield capacity status.
+- Snapshot writes need per-event ownership and DB dedup before publication. Never delete the winning snapshot when a concurrent retry loses. Private root must reject traversal and symlinks, including parent directories.
+- Queue admission must be bounded before sending full frames, not merely inside an unbounded GenServer mailbox. Use bounded admission tokens; retain references to RGB binaries only while admitted.
+- Defaults: cameras disabled, conservative concurrency, finite retention. Restrict history, configuration and image access server-side, including connected LiveView, until an auth design exists.
+- Credo is not a dependency; do not silently add it. Record unavailability as a verification limitation.
+- Real camera/annotated clip and representative FPS measurements remain an empirical acceptance gate, not something synthetic tests can establish.
+
+Sources: https://ecto.hexdocs.pm/constraints-and-upserts.html ; https://github.com/phoenixframework/phoenix_live_view/tree/v1.2.0 ; https://github.com/membraneframework/membrane_core ; https://arxiv.org/abs/1602.00763 ; https://hexdocs.pm/image/0.54.4/Image.html ; https://hexdocs.pm/elixir/1.19.1/GenServer.html

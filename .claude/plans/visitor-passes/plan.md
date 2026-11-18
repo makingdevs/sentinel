@@ -31,46 +31,46 @@ El reproductor HLS continúa siendo una ruta independiente. Ver o cambiar el rep
 
 ## Fases
 
-### 1. Persistencia y límite del contexto
+### 1. Persistencia y límite del contexto [COMPLETED]
 
-- [ ] [ecto] Crear `Sentinel.VisitorCounting` con operaciones para buscar/configurar reglas, crear eventos de forma idempotente, filtrar por cámara/fechas/dirección, paginar y obtener totales.
-- [ ] [ecto] Crear migraciones para `visitor_counting_rules` y `passage_events`: `camera_id` validado contra el catálogo estático existente; endpoints de línea normalizados; motor, dirección, umbrales, enabled/revision; `crossed_at`, `direction`, `tracking_session_id`, `track_id`, confianza, bbox y `snapshot_key`.
-- [ ] [ecto] Añadir índices para `unique(camera_id)` de regla, `unique(dedupe_key)` de evento y consultas `(camera_id, crossed_at desc)`; documentar que la unicidad de base de datos es la protección final ante carreras.
-- [ ] [ecto] Implementar almacenamiento privado de JPEG con clave generada por el servidor, validación de raíz, escritura temporal + rename atómico y compensación de archivo huérfano si la inserción DB falla. Guardar ruta relativa en DB; no almacenar el binario completo en PostgreSQL.
+- [x] [P1-T1][ecto] Crear `Sentinel.VisitorCounting` con operaciones para buscar/configurar reglas, crear eventos de forma idempotente, filtrar por cámara/fechas/dirección, paginar y obtener totales. — Contexto y schemas validados; compile/format PASS.
+- [x] [P1-T2][ecto] Crear migraciones para `visitor_counting_rules` y `passage_events`: `camera_id` validado contra el catálogo estático existente; endpoints de línea normalizados; motor, dirección, umbrales, enabled/revision; `crossed_at`, `direction`, `tracking_session_id`, `track_id`, confianza, bbox y `snapshot_key`. — Migración reversible con restricciones SQL; compile/format PASS.
+- [x] [P1-T3][ecto] Añadir índices para `unique(camera_id)` de regla, `unique(dedupe_key)` de evento y consultas `(camera_id, crossed_at desc)`; documentar que la unicidad de base de datos es la protección final ante carreras. — Índices únicos y ordenados; compile/format PASS.
+- [x] [P1-T4][ecto] Implementar almacenamiento privado de JPEG con clave generada por el servidor, validación de raíz, escritura temporal + rename atómico y compensación de archivo huérfano si la inserción DB falla. Guardar ruta relativa en DB; no almacenar el binario completo en PostgreSQL. — Namespace privado, rename atómico, lock por dedupe y compensación; cuatro pruebas PASS.
 
-### 2. Detección de cruces sin duplicados
+### 2. Detección de cruces sin duplicados [COMPLETED]
 
-- [ ] [membrane] Añadir un tracker incremental por cámara que consuma solo cajas de personas de ambos motores, asigne IDs temporales por IoU/centro/movimiento y expire tracks perdidos. Mantener coste de CPU/memoria acotado y separar la implementación de los adapters YOLO.
-- [ ] [membrane] Implementar regla de cruce dirigida sobre el punto de apoyo de la persona: lado anterior, banda de histéresis, confirmación mínima, dirección de entrada y rearmado después de salir. Emitir como máximo un evento por cruce confirmado; ignorar autos y detecciones que no alcanzan el umbral configurado.
-- [ ] [membrane] Adjuntar al evento una sola copia referenciada del frame y metadatos mínimos; dibujar la caja/etiqueta de la persona en la captura. No codificar JPEG ni escribir archivos ni esperar a `Repo` dentro del callback de medios.
-- [ ] [testing] Añadir pruebas de asociación de tracks, dos personas simultáneas, ausencia temporal/oclusión, cruce en ambas direcciones, jitter sobre la línea, rearmado/reentrada, detección duplicada por varios frames, reinicio de sesión y reglas inválidas.
+- [x] [P2-T1][membrane] Añadir un tracker incremental por cámara que consuma solo cajas de personas de ambos motores, asigne IDs temporales por IoU/centro/movimiento y expire tracks perdidos. Mantener coste de CPU/memoria acotado y separar la implementación de los adapters YOLO. — Asociación greedy por IoU/movimiento, máximo 100 tracks; compile/format PASS.
+- [x] [P2-T2][membrane] Implementar regla de cruce dirigida sobre el punto de apoyo de la persona: lado anterior, banda de histéresis, confirmación mínima, dirección de entrada y rearmado después de salir. Emitir como máximo un evento por cruce confirmado; ignorar autos y detecciones que no alcanzan el umbral configurado. — Segmento finito, confirmación e histéresis con rearmado a 2× banda; compile/format PASS.
+- [x] [P2-T3][membrane] Adjuntar al evento una sola copia referenciada del frame y metadatos mínimos; dibujar la caja/etiqueta de la persona en la captura. No codificar JPEG ni escribir archivos ni esperar a `Repo` dentro del callback de medios. — Processor puro refiere RGB; Encoder anota/codifica fuera de medios; compile/format PASS.
+- [x] [P2-T4][testing] Añadir pruebas de asociación de tracks, dos personas simultáneas, ausencia temporal/oclusión, cruce en ambas direcciones, jitter sobre la línea, rearmado/reentrada, detección duplicada por varios frames, reinicio de sesión y reglas inválidas. — Siete pruebas de tracking/cruces y JPEG; PASS.
 
-### 3. Analítica permanente y resiliente
+### 3. Analítica permanente y resiliente [COMPLETED]
 
-- [ ] [otp] Crear `VisitorCounting.Manager` y supervisor con un proceso canónico por cámara habilitada, clave única por cámara y límite de concurrencia. Arrancarlo después de `Repo`; sincronizar sus procesos al iniciar, cambiar regla, habilitar/deshabilitar una cámara y terminar limpiamente.
-- [ ] [membrane] Crear el pipeline de analítica por cámara: abrir RTSP, decodificar H264/H265, convertir al tamaño de inferencia, usar el motor guardado en la regla, rastrear cruces y observar EOS/desconexión. Este pipeline no crea HLS ni depende del espectador.
-- [ ] [otp] Gestionar reconexión con backoff, reset de trackers por nueva sesión, estados loading/active/error/capacity/saturated y métricas de cruces/frames perdidos/cola. No permitir que una segunda vista o motor cree otro contador para la misma cámara.
-- [ ] [testing] Cubrir inicio/parada por cambios de reglas, límite de cámaras, recuperación de RTSP, cierre de procesos y no duplicación al abrir/cambiar espectadores HLS.
+- [x] [P3-T1][otp] Crear `VisitorCounting.Manager` y supervisor con un proceso canónico por cámara habilitada, clave única por cámara y límite de concurrencia. Arrancarlo después de `Repo`; sincronizar sus procesos al iniciar, cambiar regla, habilitar/deshabilitar una cámara y terminar limpiamente. — Registry y supervisor rest_for_one; sincronización de reglas y cupo por cámara.
+- [x] [P3-T2][membrane] Crear el pipeline de analítica por cámara: abrir RTSP, decodificar H264/H265, convertir al tamaño de inferencia, usar el motor guardado en la regla, rastrear cruces y observar EOS/desconexión. Este pipeline no crea HLS ni depende del espectador. — RTSP H264/H265 a RGB/latest/detector/sink; sin encoder ni HLS.
+- [x] [P3-T3][otp] Gestionar reconexión con backoff, reset de trackers por nueva sesión, estados loading/active/error/capacity/saturated y métricas de cruces/frames perdidos/cola. No permitir que una segunda vista o motor cree otro contador para la misma cámara. — Backoff 1–30 s, watchdog y sesiones nuevas; estado/telemetría de cola y pérdidas.
+- [x] [P3-T4][testing] Cubrir inicio/parada por cambios de reglas, límite de cámaras, recuperación de RTSP, cierre de procesos y no duplicación al abrir/cambiar espectadores HLS. — Pruebas supervisadas de capacidad, cierre, reconexión e independencia HLS; PASS.
 
-### 4. Guardado, historial y ciclo de vida
+### 4. Guardado, historial y ciclo de vida [COMPLETED]
 
-- [ ] [ecto] Añadir escritor supervisado de eventos: consumir de una cola limitada, persistir JPEG y fila con la misma clave idempotente, limpiar JPEG ante error de DB, y registrar/reintentar fallas con límites explícitos. Publicar evento solo después de persistirlo; observar saturación y contabilizar cruces que no pudieron guardarse.
-- [ ] [ecto] Implementar retención configurable con borrado ordenado de filas/archivos, modo de simulación para operación manual y reporte de archivos huérfanos; no adoptar retención indefinida por defecto.
-- [ ] [liveview] Añadir `VisitorCountingLive` en `/visitors`: filtro de cámara, rango de fechas y dirección; totales del periodo; stream paginado de capturas recientes con hora, confianza y enlace a evento. Recibir avisos PubSub y reconsultar/insertar el evento persistido, sin usar el stream para contar ni filtrar en memoria.
-- [ ] [liveview] Servir capturas desde una acción que resuelve `event_id` por DB y verifica que la clave calculada permanezca dentro del directorio privado. Añadir control de acceso/restricción antes de exponer este endpoint fuera de la red local.
+- [x] [P4-T1][ecto] Añadir escritor supervisado de eventos: consumir de una cola limitada, persistir JPEG y fila con la misma clave idempotente, limpiar JPEG ante error de DB, y registrar/reintentar fallas con límites explícitos. Publicar evento solo después de persistirlo; observar saturación y contabilizar cruces que no pudieron guardarse. — Slots ETS antes de mensajes, JPEG/DB fuera de medios, tres intentos, PubSub post-commit; PASS.
+- [x] [P4-T2][ecto] Implementar retención configurable con borrado ordenado de filas/archivos, modo de simulación para operación manual y reporte de archivos huérfanos; no adoptar retención indefinida por defecto. — Retención por defecto 7 días, lotes de 100/minuto, simulación y reporte; PASS.
+- [x] [P4-T3][liveview] Añadir `VisitorCountingLive` en `/visitors`: filtro de cámara, rango de fechas y dirección; totales del periodo; stream paginado de capturas recientes con hora, confianza y enlace a evento. Recibir avisos PubSub y reconsultar/insertar el evento persistido, sin usar el stream para contar ni filtrar en memoria. — Stream de 24, filtros UTC validados, totales SQL y detalle; pruebas LiveView PASS.
+- [x] [P4-T4][liveview] Servir capturas desde una acción que resuelve `event_id` por DB y verifica que la clave calculada permanezca dentro del directorio privado. Añadir control de acceso/restricción antes de exponer este endpoint fuera de la red local. — Loopback en HTTP/WS, ID resuelto por DB, rutas seguras y no-store; pruebas negativas PASS.
 
-### 5. Calibración y operación
+### 5. Calibración y operación [BLOCKED: P5-T4 requiere fixture de cruces conocido]
 
-- [ ] [liveview] En `/cameras`, añadir acceso a configuración por cámara y un hook JS de calibración para dibujar/mover la línea sobre el video; convertir coordenadas del elemento a porcentajes normalizados y enviar endpoints/dirección con un formulario LiveView validado.
-- [ ] [liveview] Mostrar si el contador está deshabilitado, cargando, contando o saturado; permitir seleccionar motor, dirección, umbral y habilitar/deshabilitar; explicar que el historial registra cruces y no personas únicas.
-- [ ] Documentar variables de almacenamiento privado, límites de procesos, espacio de disco, retención, recuperación y exposición de imágenes. Añadir comandos para `mix ecto.migrate`, habilitar cámara y revisar conteo.
-- [ ] [testing] Añadir fixture de video con línea calibrada y cruces conocidos. Verificar ambos backends con la misma escena, que cada evento tenga una sola imagen legible, que el conteo no dependa de la vista HLS y que la latencia/FPS siga dentro de límites.
+- [x] [P5-T1][liveview] En `/cameras`, añadir acceso a configuración por cámara y un hook JS de calibración para dibujar/mover la línea sobre el video; convertir coordenadas del elemento a porcentajes normalizados y enviar endpoints/dirección con un formulario LiveView validado. — SVG con normalización sin letterbox, arrastre y formulario numérico; pruebas JS/LiveView PASS; QA visual pendiente.
+- [x] [P5-T2][liveview] Mostrar si el contador está deshabilitado, cargando, contando o saturado; permitir seleccionar motor, dirección, umbral y habilitar/deshabilitar; explicar que el historial registra cruces y no personas únicas. — Motor/dirección/confianza/habilitación independientes del preview y aviso de pérdidas; PASS.
+- [x] [P5-T3] Documentar variables de almacenamiento privado, límites de procesos, espacio de disco, retención, recuperación y exposición de imágenes. Añadir comandos para `mix ecto.migrate`, habilitar cámara y revisar conteo. — Variables y comandos documentados en docs/visitor-counting.md; assets, simulación y precommit PASS.
+- [ ] [P5-T4][testing] [BLOCKED] Añadir fixture de video con línea calibrada y cruces conocidos. Verificar ambos backends con la misma escena, que cada evento tenga una sola imagen legible, que el conteo no dependa de la vista HLS y que la latencia/FPS siga dentro de límites. — Falta clip local de cruces con anotaciones/conteos esperados; solicitud al usuario pendiente. No se ejecutó comparación real de ambos motores ni medición FPS.
 
-### 6. Verificación final
+### 6. Verificación final [BLOCKED: detector no llegó a active; faltan cruces conocidos]
 
-- [ ] Ejecutar `mix compile --warnings-as-errors`, `mix format --check-formatted`, pruebas de contexto/Ecto, tracker/Media, LiveView y `mix precommit`; resolver fallos.
-- [ ] Hacer smoke de una cámara configurada durante entrada/salida y desconexión; revisar manualmente las imágenes guardadas, la página `/visitors`, totales por periodo, duplicados y límite de retención.
-- [ ] Actualizar `README.md` y documentación de operación con las limitaciones de tracking y la diferencia entre cruces y visitantes únicos. No afirmar precisión general sin anotaciones representativas por cámara.
+- [x] [P6-T1] Ejecutar `mix compile --warnings-as-errors`, `mix format --check-formatted`, pruebas de contexto/Ecto, tracker/Media, LiveView y `mix precommit`; resolver fallos. — `mix precommit` PASS: compile, formato, 65 pruebas Elixir, 8 JS; `git diff --check` limpio.
+- [ ] [P6-T2] [BLOCKED] Hacer smoke de una cámara configurada durante entrada/salida y desconexión; revisar manualmente las imágenes guardadas, la página `/visitors`, totales por periodo, duplicados y límite de retención. — RTSP capturó frame y master HLS 200, pero segmentos dieron 503 y el motor Python quedó loading/error; escena vacía, cero eventos. Regla temporal deshabilitada.
+- [x] [P6-T3] Actualizar `README.md` y documentación de operación con las limitaciones de tracking y la diferencia entre cruces y visitantes únicos. No afirmar precisión general sin anotaciones representativas por cámara.
 
 ## Criterios de aceptación
 

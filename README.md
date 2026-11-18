@@ -28,3 +28,14 @@ Instala el reproductor con `npm ci --prefix assets` antes de compilar assets.
 La detección puede ejecutarse con Python/Ultralytics o Elixir/YOLO/Ortex, con un
 selector por cámara y cajas dentro del video HLS. Consulta
 [instalación, ejecución y comparación](docs/detection.md).
+
+## Cruces de personas
+
+El contador continuo funciona por cámara habilitada aunque no haya espectadores HLS.
+Desde `/cameras` se calibra una línea y desde `/visitors` se consultan eventos,
+capturas privadas y totales. Estas funciones están restringidas a localhost.
+Ejecuta `mix ecto.migrate` antes de usarlas y consulta
+[operación, retención y límites](docs/visitor-counting.md).
+Los eventos cuentan **cruces**, no visitantes únicos; la precisión por cámara
+requiere un clip anotado y pruebas representativas. La validación con video real
+de entradas/salidas todavía está pendiente.
