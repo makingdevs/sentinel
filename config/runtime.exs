@@ -23,6 +23,23 @@ config :sentinel, :detection,
   worker_script:
     System.get_env("DETECTION_WORKER_SCRIPT", Path.expand("../python/worker.py", __DIR__))
 
+visitor_integer = fn name, default, range ->
+  case Integer.parse(System.get_env(name, to_string(default))) do
+    {value, ""} ->
+      if value in range, do: value, else: raise("#{name} outside permitted range")
+
+    _ ->
+      raise "#{name} must be an integer"
+  end
+end
+
+config :sentinel, :visitor_counting,
+  snapshot_root:
+    System.get_env("VISITOR_SNAPSHOT_ROOT", Path.expand("../tmp/visitor-snapshots", __DIR__)),
+  max_cameras: visitor_integer.("VISITOR_MAX_CAMERAS", 2, 1..8),
+  queue_capacity: visitor_integer.("VISITOR_QUEUE_CAPACITY", 8, 1..128),
+  retention_days: visitor_integer.("VISITOR_RETENTION_DAYS", 7, 1..365)
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

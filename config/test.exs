@@ -1,5 +1,7 @@
 import Config
 
+config :sentinel, :visitor_counting, start_manager: false
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
