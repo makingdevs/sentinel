@@ -5,13 +5,22 @@ defmodule Sentinel.Detection.Filter do
 
   def_input_pad(:input, accepted_format: %Membrane.RawVideo{pixel_format: :RGB})
   def_output_pad(:output, accepted_format: %Membrane.RawVideo{pixel_format: :RGB})
-  def_options(engine: [spec: String.t()], generation: [spec: String.t()])
+
+  def_options(
+    engine: [spec: String.t()],
+    generation: [spec: String.t()],
+    counting_rule: [spec: term(), default: nil]
+  )
 
   @impl true
   def handle_init(_ctx, opts) do
     {[],
      %{
        engine: opts.engine,
+       counting_rule: opts.counting_rule,
+       tracker: Sentinel.VisitorCounting.Tracker.new(),
+       tracking_session: Ecto.UUID.generate(),
+       inflight_frame: nil,
        generation: opts.generation,
        worker: nil,
        monitor: nil,
@@ -55,7 +64,16 @@ defmodule Sentinel.Detection.Filter do
     end
 
     {[stream_format: {:output, format}],
-     %{state | format: format, objects: [], result_at: nil, result_pts: nil, pending: nil}}
+     %{
+       state
+       | format: format,
+         objects: [],
+         result_at: nil,
+         result_pts: nil,
+         pending: nil,
+         tracker: Sentinel.VisitorCounting.Tracker.new(),
+         tracking_session: Ecto.UUID.generate()
+     }}
   end
 
   @impl true
@@ -70,7 +88,8 @@ defmodule Sentinel.Detection.Filter do
       frame_id: id,
       pts: buffer.pts,
       captured_at: now,
-      generation: state.generation
+      generation: state.generation,
+      crossed_at: DateTime.utc_now()
     }
 
     dropped = if state.busy != nil and state.pending != nil, do: 1, else: 0
@@ -154,12 +173,15 @@ defmodule Sentinel.Detection.Filter do
       %{engine: state.engine, generation: state.generation}
     )
 
+    {crossing_actions, state} = count_result(objects, state)
+
     state = %{
       state
       | objects: objects,
         result_at: captured,
         result_pts: pts,
         busy: nil,
+        inflight_frame: nil,
         timer: nil,
         retry_count: 0
     }
@@ -172,7 +194,7 @@ defmodule Sentinel.Detection.Filter do
         %{state | pending: nil}
       end
 
-    {[], state}
+    {crossing_actions, state}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, _ctx, %{monitor: ref} = state) do
@@ -181,6 +203,9 @@ defmodule Sentinel.Detection.Filter do
     state = %{
       state
       | ready?: false,
+        tracker: Sentinel.VisitorCounting.Tracker.new(),
+        tracking_session: Ecto.UUID.generate(),
+        inflight_frame: nil,
         worker: nil,
         busy: nil,
         pending: nil,
@@ -224,7 +249,16 @@ defmodule Sentinel.Detection.Filter do
       do: DynamicSupervisor.terminate_child(Sentinel.Detection.Supervisor, state.worker)
 
     {[notify_parent: {:detection_status, :error}],
-     %{state | ready?: false, busy: nil, pending: nil, objects: []}}
+     %{
+       state
+       | ready?: false,
+         busy: nil,
+         pending: nil,
+         objects: [],
+         inflight_frame: nil,
+         tracker: Sentinel.VisitorCounting.Tracker.new(),
+         tracking_session: Ecto.UUID.generate()
+     }}
   end
 
   defp due?(%{last_started: nil}, _now), do: true
@@ -243,9 +277,32 @@ defmodule Sentinel.Detection.Filter do
     %{
       state
       | busy: frame.frame_id,
+        inflight_frame: if(state.counting_rule, do: frame, else: nil),
         inflight_format: {frame.width, frame.height},
         last_started: System.monotonic_time(:millisecond),
         timer: timer
     }
+  end
+
+  defp count_result(_objects, %{counting_rule: nil} = state), do: {[], state}
+
+  defp count_result(objects, state) do
+    if state.inflight_format == {state.format.width, state.format.height} do
+      {tracker, events} =
+        Sentinel.VisitorCounting.Processor.process(
+          state.tracker,
+          objects,
+          state.inflight_frame,
+          state.counting_rule,
+          state.tracking_session
+        )
+
+      Enum.each(events, &Sentinel.VisitorCounting.Writer.enqueue/1)
+      actions = [notify_parent: {:analytics_progress, length(events)}]
+
+      {actions, %{state | tracker: tracker}}
+    else
+      {[], state}
+    end
   end
 end

@@ -1,0 +1,84 @@
+defmodule Sentinel.VisitorCounting.Pipeline do
+  @moduledoc "RTSP analytics ending at an RGB sink. No HLS, encoder or viewer lifetime."
+  use Membrane.Pipeline
+  def start(options), do: Membrane.Pipeline.start_link(__MODULE__, options)
+  def stop(pid), do: Membrane.Pipeline.terminate(pid, force?: true, timeout: 2_000)
+
+  @impl true
+  def handle_init(_ctx, options) do
+    spec =
+      child(:source, %Membrane.RTSP.Source{
+        transport: :tcp,
+        allowed_media_types: [:video],
+        stream_uri: options.source_url,
+        on_connection_closed: :raise_error
+      })
+
+    {[spec: spec], options}
+  end
+
+  @impl true
+  def handle_child_notification({:set_up_tracks, tracks}, :source, _ctx, state) do
+    track =
+      Enum.find(
+        tracks,
+        &(&1.type == :video and String.upcase(&1.rtpmap.encoding) in ~w(H264 H265))
+      )
+
+    if track do
+      parser =
+        if String.upcase(track.rtpmap.encoding) == "H264",
+          do: %Membrane.H264.Parser{output_stream_structure: :annexb, output_alignment: :au},
+          else: %Membrane.H265.Parser{output_stream_structure: :annexb, output_alignment: :au}
+
+      decoder =
+        if String.upcase(track.rtpmap.encoding) == "H264",
+          do: Membrane.H264.FFmpeg.Decoder,
+          else: Membrane.H265.FFmpeg.Decoder
+
+      spec =
+        get_child(:source)
+        |> via_out(Pad.ref(:output, track.control_path))
+        |> child(:parser, parser)
+        |> child(:decoder, decoder)
+        |> via_in(:input, auto_demand_size: 1)
+        |> child(:rgb, %Membrane.FFmpeg.SWScale.Converter{format: :RGB, output_width: 640})
+        |> via_in(:input, auto_demand_size: 1)
+        |> child(:latest, %Sentinel.Detection.LatestFrame{
+          engine: state.rule.engine,
+          generation: state.session
+        })
+        |> via_in(:input, auto_demand_size: 1)
+        |> child(:detector, %Sentinel.Detection.Filter{
+          engine: state.rule.engine,
+          generation: state.session,
+          counting_rule: state.rule
+        })
+        |> via_in(:input, auto_demand_size: 1)
+        |> child(:discard, Sentinel.VisitorCounting.Discard)
+
+      {[spec: spec], state}
+    else
+      send(state.owner, {:analytics_error, self(), :unsupported_codec})
+      {[terminate: :normal], state}
+    end
+  end
+
+  def handle_child_notification({:detection_status, status}, :detector, _ctx, state) do
+    send(state.owner, {:analytics_status, self(), status})
+    {[], state}
+  end
+
+  def handle_child_notification({:analytics_progress, crossings}, :detector, _ctx, state) do
+    send(state.owner, {:analytics_progress, self(), crossings})
+    {[], state}
+  end
+
+  def handle_child_notification(_, _, _, state), do: {[], state}
+
+  @impl true
+  def handle_element_end_of_stream(:discard, :input, _ctx, state),
+    do: {[terminate: :normal], state}
+
+  def handle_element_end_of_stream(_, _, _, state), do: {[], state}
+end

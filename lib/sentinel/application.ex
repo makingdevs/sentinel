@@ -20,6 +20,7 @@ defmodule Sentinel.Application do
       {DynamicSupervisor, strategy: :one_for_one, name: Sentinel.Monitoring.Supervisor},
       {DynamicSupervisor,
        strategy: :one_for_one, name: Sentinel.Detection.Supervisor, max_children: 8},
+      Sentinel.VisitorCounting.Supervisor,
       # Start to serve requests, typically the last entry
       SentinelWeb.Endpoint
     ]
