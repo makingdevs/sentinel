@@ -66,10 +66,10 @@ El reproductor HLS continúa siendo una ruta independiente. Ver o cambiar el rep
 - [x] [P5-T3] Documentar variables de almacenamiento privado, límites de procesos, espacio de disco, retención, recuperación y exposición de imágenes. Añadir comandos para `mix ecto.migrate`, habilitar cámara y revisar conteo. — Variables y comandos documentados en docs/visitor-counting.md; assets, simulación y precommit PASS.
 - [ ] [P5-T4][testing] [BLOCKED] Añadir fixture de video con línea calibrada y cruces conocidos. Verificar ambos backends con la misma escena, que cada evento tenga una sola imagen legible, que el conteo no dependa de la vista HLS y que la latencia/FPS siga dentro de límites. — Falta clip local de cruces con anotaciones/conteos esperados; solicitud al usuario pendiente. No se ejecutó comparación real de ambos motores ni medición FPS.
 
-### 6. Verificación final [BLOCKED: detector no llegó a active; faltan cruces conocidos]
+### 6. Verificación final [IN_PROGRESS: live smoke parcial; faltan recuperación y fixture anotado]
 
 - [x] [P6-T1] Ejecutar `mix compile --warnings-as-errors`, `mix format --check-formatted`, pruebas de contexto/Ecto, tracker/Media, LiveView y `mix precommit`; resolver fallos. — `mix precommit` PASS: compile, formato, 65 pruebas Elixir, 8 JS; `git diff --check` limpio.
-- [ ] [P6-T2] [BLOCKED] Hacer smoke de una cámara configurada durante entrada/salida y desconexión; revisar manualmente las imágenes guardadas, la página `/visitors`, totales por periodo, duplicados y límite de retención. — RTSP capturó frame y master HLS 200, pero segmentos dieron 503 y el motor Python quedó loading/error; escena vacía, cero eventos. Regla temporal deshabilitada.
+- [ ] [P6-T2][IN_PROGRESS] Hacer smoke de una cámara configurada durante entrada/salida y desconexión; revisar manualmente las imágenes guardadas, la página `/visitors`, totales por periodo, duplicados y límite de retención. — Smoke RTSP real parcial (2026-11-18): motor Elixir `active`, 1,309 frames, 4 eventos persistidos (2 entradas, 2 salidas), cuatro JPEG revisados con persona visible, `/visitors` HTTP 200, cola vacía y cero descartes/fallos; regla temporal deshabilitada. HLS continúa en 503. Falta comprobar desconexión/reconexión, deduplicación/retención en el smoke y resolver la publicación HLS.
 - [x] [P6-T3] Actualizar `README.md` y documentación de operación con las limitaciones de tracking y la diferencia entre cruces y visitantes únicos. No afirmar precisión general sin anotaciones representativas por cámara.
 
 ## Criterios de aceptación
