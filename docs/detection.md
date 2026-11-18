@@ -17,6 +17,15 @@ bash scripts/detection/server.sh
 
 El script crea `.venv`, instala el lock Python con hashes, verifica SHA256 del peso original, exporta ONNX estático opset17 a 640px y guarda `models/manifest.json`. Los pesos, el entorno y las salidas temporales están ignorados por Git. El script contiene las opciones CXX necesarias para compilar EXLA 0.9.2 con el Xcode de esta máquina; no modifica dependencias descargadas ni instala paquetes globales.
 
+Si `mix compile` falla al compilar EXLA en macOS con errores de C++ como `missing-template-arg-list-after-template-kw` o `invalid-specialization`, recompila esa dependencia con las opciones que usa el script:
+
+```bash
+CXX='c++ -Wno-missing-template-arg-list-after-template-kw -Wno-invalid-specialization' mix deps.compile exla --force
+mix compile
+```
+
+Las comillas hacen que `CXX` incluya tanto el compilador como sus opciones. El primer comando fuerza la recompilación de EXLA; el segundo continúa la compilación de la aplicación.
+
 `server.sh` utiliza el puerto 4013 por defecto. Cambiarlo con `PORT`. Las fuentes se leen desde `CAMERA_RTSP_SOURCES_FILE` (por defecto `tmp/camera_rtsp_sources.json`), con la misma configuración privada del monitoreo existente. Las credenciales RTSP no se envían al navegador.
 
 Variables de ubicación opcionales:
