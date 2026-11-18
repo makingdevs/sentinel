@@ -26,12 +26,13 @@ import {hooks as colocatedHooks} from "phoenix-colocated/sentinel"
 import topbar from "../vendor/topbar"
 import Hls from "hls.js"
 import {createHlsPlayer} from "./hooks/hls_player.mjs"
+import {CountingLine} from "./hooks/counting_line.mjs"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, HlsPlayer: createHlsPlayer(Hls)},
+  hooks: {...colocatedHooks, HlsPlayer: createHlsPlayer(Hls), CountingLine},
 })
 
 // Show progress bar on live navigation and form submits

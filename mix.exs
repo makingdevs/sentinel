@@ -110,7 +110,13 @@ defmodule Sentinel.MixProject do
         "esbuild sentinel --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "cmd node --test assets/js/hooks/hls_player.test.mjs assets/js/hooks/counting_line.test.mjs",
+        "test"
+      ]
     ]
   end
 end

@@ -16,6 +16,12 @@
     <span class="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-400">
       División &amp; La Virgen
     </span>
+    <.link
+      :if={@visitor_access?}
+      id="visitor-history"
+      href={~p"/visitors"}
+      class="rounded-lg px-4 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
+    >Historial de cruces</.link>
   </header>
 
   <section aria-labelledby="camera-heading">
@@ -115,40 +121,57 @@
             <.icon name="hero-x-mark" class="size-5" />
           </button>
         </div>
-        <div
-          id={"player-#{camera.id}-#{camera.quality}-#{camera.generation}"}
-          phx-hook="HlsPlayer"
-          phx-update="ignore"
-          data-source={camera.url}
-          data-status-url={
-            if(camera.engine != "off",
-              do: "/hls/#{camera.id}/#{camera.quality}/#{camera.engine}/status"
-            )
-          }
-          class="relative aspect-video bg-black"
-        >
-          <span
-            :if={camera.engine != "off"}
-            data-detection-status
-            class="pointer-events-none absolute bottom-12 left-3 z-10 rounded-md bg-black/75 px-2 py-1 text-xs text-teal-200"
-          >Preparando detector…</span>
-          <video
-            id={"video-#{camera.id}-#{camera.quality}-#{camera.generation}"}
-            aria-label={"#{camera.branch} · #{camera.label} · #{camera.quality}"}
-            autoplay
-            muted
-            playsinline
-            controls
-            class="h-full w-full"
-          ></video>
-          <p
-            data-player-status
-            role="status"
-            aria-live="polite"
-            class="pointer-events-none absolute inset-x-3 top-3 rounded-lg bg-black/70 px-3 py-2 text-xs text-slate-200"
+        <div class="relative">
+          <div
+            id={"player-#{camera.id}-#{camera.quality}-#{camera.generation}"}
+            phx-hook="HlsPlayer"
+            phx-update="ignore"
+            data-source={camera.url}
+            data-status-url={
+              if(camera.engine != "off",
+                do: "/hls/#{camera.id}/#{camera.quality}/#{camera.engine}/status"
+              )
+            }
+            class="relative aspect-video bg-black"
           >
-            Conectando con la cámara…
-          </p>
+            <span
+              :if={camera.engine != "off"}
+              data-detection-status
+              class="pointer-events-none absolute bottom-12 left-3 z-10 rounded-md bg-black/75 px-2 py-1 text-xs text-teal-200"
+            >Preparando detector…</span>
+            <video
+              id={"video-#{camera.id}-#{camera.quality}-#{camera.generation}"}
+              aria-label={"#{camera.branch} · #{camera.label} · #{camera.quality}"}
+              autoplay
+              muted
+              playsinline
+              controls
+              class="h-full w-full"
+            ></video>
+            <p
+              data-player-status
+              role="status"
+              aria-live="polite"
+              class="pointer-events-none absolute inset-x-3 top-3 rounded-lg bg-black/70 px-3 py-2 text-xs text-slate-200"
+            >
+              Conectando con la cámara…
+            </p>
+          </div>
+          <div
+            :if={camera.counting_form}
+            id={"calibration-#{camera.id}-#{camera.quality}-#{camera.generation}"}
+            phx-hook="CountingLine"
+            phx-update="ignore"
+            data-camera-id={camera.id}
+            data-video-id={"video-#{camera.id}-#{camera.quality}-#{camera.generation}"}
+            data-x1={camera.counting_rule.x1}
+            data-y1={camera.counting_rule.y1}
+            data-x2={camera.counting_rule.x2}
+            data-y2={camera.counting_rule.y2}
+            class="pointer-events-none absolute inset-0"
+            aria-label="Calibración de línea de conteo"
+          >
+          </div>
         </div>
         <div class="flex flex-wrap items-end justify-between gap-3 px-4 py-3">
           <.form
@@ -199,6 +222,102 @@
           >
             <.icon name="hero-arrow-path" class="size-4" /> Reintentar
           </button>
+        </div>
+        <div :if={@visitor_access?} class="border-t border-white/10 px-4 py-4">
+          <p
+            id={"counting-status-#{camera.id}"}
+            class="mb-2 text-xs text-slate-400"
+            aria-live="polite"
+          >
+            Conteo continuo:
+            <span class="text-teal-300">{counting_status_text(camera.counting_status)}</span>
+            · Cola {camera.counting_stats.queued}/{camera.counting_stats.capacity}
+          </p>
+          <p
+            :if={camera.counting_stats.dropped > 0 or camera.counting_stats.failures > 0}
+            id={"counting-losses-#{camera.id}"}
+            class="mb-3 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-200"
+          >
+            {camera.counting_stats.dropped} cruces no guardados · {camera.counting_stats.failures} intentos fallidos desde el arranque del escritor. El historial puede estar incompleto.
+          </p>
+          <button
+            id={"configure-counting-#{camera.id}"}
+            phx-click="configure-counting"
+            phx-value-id={camera.id}
+            class="rounded-lg px-3 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
+          >Configurar conteo de cruces</button>
+          <.form
+            :if={camera.counting_form}
+            for={camera.counting_form}
+            id={"counting-rule-#{camera.id}"}
+            phx-change="validate-counting"
+            phx-submit="save-counting"
+            phx-value-id={camera.id}
+            class="mt-4 space-y-4"
+          >
+            <p class="text-xs leading-5 text-slate-400">
+              Dibuja una línea sobre el video, arrastra sus extremos o mueve la línea completa. Las coordenadas van de 0 a 1. También puedes ajustarlas aquí.
+            </p>
+            <div class="grid grid-cols-2 gap-3">
+              <.input
+                :for={field <- [:x1, :y1, :x2, :y2]}
+                field={camera.counting_form[field]}
+                type="number"
+                label={String.upcase(to_string(field))}
+                min="0"
+                max="1"
+                step="0.001"
+                class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              />
+            </div>
+            <.input
+              field={camera.counting_form[:engine]}
+              type="select"
+              label="Motor del contador"
+              options={[{"Python · YOLO", "python"}, {"Elixir · ONNX", "elixir"}]}
+              class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            />
+            <.input
+              field={camera.counting_form[:entry_direction]}
+              type="select"
+              label="Dirección de entrada"
+              options={[{"Lado positivo", "positive"}, {"Lado negativo", "negative"}]}
+              class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            />
+            <p class="text-xs leading-5 text-slate-500">
+              La línea va del extremo verde al amarillo. Para una línea horizontal de izquierda a derecha, el lado positivo queda abajo. Confirma el sentido con un cruce de prueba.
+            </p>
+            <.input
+              field={camera.counting_form[:confidence]}
+              type="number"
+              label="Confianza mínima"
+              min="0.35"
+              max="1"
+              step="0.01"
+              class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            />
+            <.input
+              field={camera.counting_form[:enabled]}
+              type="checkbox"
+              label="Habilitar conteo continuo"
+              class="size-4 rounded border-slate-600 accent-teal-300"
+            />
+            <p class="text-xs leading-5 text-slate-400">
+              Cuenta cruces, no personas únicas. Continúa sin espectadores y usa su propio motor. Cambiar el motor del reproductor no cambia el conteo.
+            </p>
+            <button
+              id={"save-counting-#{camera.id}"}
+              class="rounded-lg bg-teal-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              phx-disable-with="Guardando…"
+            >Guardar regla</button>
+            <button
+              id={"close-counting-#{camera.id}"}
+              type="button"
+              phx-click="close-counting"
+              phx-value-id={camera.id}
+              class="ml-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:text-white"
+            >Cerrar calibración</button>
+          </.form>
         </div>
       </article>
     </div>
