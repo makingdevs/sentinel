@@ -32,7 +32,8 @@ defmodule SentinelWeb.CameraLive do
       true ->
         with {:ok, camera} <- Monitoring.fetch_camera(id),
              {:ok, url} <- Monitoring.player_url(id, "secundaria") do
-          card = Map.merge(camera, %{quality: "secundaria", generation: 0, url: url})
+          card =
+            Map.merge(camera, %{quality: "secundaria", generation: 0, url: url, engine: "off"})
 
           {:noreply,
            socket
@@ -68,6 +69,22 @@ defmodule SentinelWeb.CameraLive do
     update_player(socket, id, quality, false)
   end
 
+  def handle_event("engine", %{"id" => id, "detection" => %{"engine" => engine}}, socket) do
+    with {:ok, card} <- Map.fetch(socket.assigns.selected, id),
+         {:ok, url} <- Monitoring.player_url(id, card.quality, engine) do
+      card = %{card | engine: engine, url: url, generation: card.generation + 1}
+      {:noreply, put_card(socket, card)}
+    else
+      _ ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Este detector no está disponible en el servidor. Prueba el otro motor o desactiva la detección."
+         )}
+    end
+  end
+
   def handle_event("retry", %{"id" => id}, socket) do
     case Map.fetch(socket.assigns.selected, id) do
       {:ok, card} -> update_player(socket, id, card.quality, true)
@@ -79,7 +96,9 @@ defmodule SentinelWeb.CameraLive do
 
   defp update_player(socket, id, quality, retry?) do
     with {:ok, card} <- Map.fetch(socket.assigns.selected, id),
-         {:ok, url} <- Monitoring.player_url(id, quality) do
+         {:ok, url} <- Monitoring.player_url(id, quality, card.engine) do
+      if retry? and card.engine != "off", do: Monitoring.retry_detector(id, quality, card.engine)
+
       if retry? or card.quality != quality do
         card = %{card | quality: quality, url: url, generation: card.generation + 1}
         {:noreply, put_card(socket, card)}
@@ -93,6 +112,7 @@ defmodule SentinelWeb.CameraLive do
 
   defp put_card(socket, card) do
     card = Map.put(card, :form, to_form(%{"value" => card.quality}, as: :quality))
+    card = Map.put(card, :detection_form, to_form(%{"engine" => card.engine}, as: :detection))
     selected = Map.put(socket.assigns.selected, card.id, card)
 
     socket

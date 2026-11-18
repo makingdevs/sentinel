@@ -86,3 +86,23 @@ test("incompatible codec errors explain the H264 requirement without a retry loo
   assert.equal(player.timers.size, 0)
   player.hook.destroyed()
 })
+
+test("detection status polling updates its badge and is cancelled on player removal", async () => {
+  const originalFetch = globalThis.fetch
+  const player = mount()
+  const badge = {textContent: ""}
+  player.hook.el.dataset.statusUrl = "/hls/division-1/secundaria/python/status"
+  player.hook.el.querySelector = () => badge
+  globalThis.fetch = async () => ({ok: true, json: async () => ({status: "saturated"})})
+  try {
+    await player.hook.pollDetection()
+    assert.match(badge.textContent, /saturado/)
+    assert.equal(player.timers.size, 1)
+    const signal = player.hook.statusAbort.signal
+    player.hook.destroyed()
+    assert.equal(signal.aborted, true)
+    assert.equal(player.timers.size, 0)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})

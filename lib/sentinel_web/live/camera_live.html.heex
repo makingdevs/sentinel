@@ -120,8 +120,18 @@
           phx-hook="HlsPlayer"
           phx-update="ignore"
           data-source={camera.url}
+          data-status-url={
+            if(camera.engine != "off",
+              do: "/hls/#{camera.id}/#{camera.quality}/#{camera.engine}/status"
+            )
+          }
           class="relative aspect-video bg-black"
         >
+          <span
+            :if={camera.engine != "off"}
+            data-detection-status
+            class="pointer-events-none absolute bottom-12 left-3 z-10 rounded-md bg-black/75 px-2 py-1 text-xs text-teal-200"
+          >Preparando detector…</span>
           <video
             id={"video-#{camera.id}-#{camera.quality}-#{camera.generation}"}
             aria-label={"#{camera.branch} · #{camera.label} · #{camera.quality}"}
@@ -156,6 +166,25 @@
               options={[
                 {"Secundaria · menor consumo", "secundaria"},
                 {"Principal · más detalle", "principal"}
+              ]}
+              class="mt-1 block max-w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-teal-300"
+            />
+          </.form>
+          <.form
+            for={camera.detection_form}
+            id={"detection-#{camera.id}"}
+            phx-change="engine"
+            phx-value-id={camera.id}
+          >
+            <.input
+              field={camera.detection_form[:engine]}
+              id={"engine-#{camera.id}"}
+              type="select"
+              label="Personas y autos"
+              options={[
+                {"Desactivado", "off"},
+                {"Python · YOLO", "python"},
+                {"Elixir · ONNX", "elixir"}
               ]}
               class="mt-1 block max-w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-teal-300"
             />

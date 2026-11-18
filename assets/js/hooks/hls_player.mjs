@@ -22,6 +22,23 @@ export function createHlsPlayer(Hls, schedule = setTimeout, cancel = clearTimeou
       listen("error", () => this.retry())
       this.video.muted = true
       this.open()
+      this.pollDetection()
+    },
+
+    async pollDetection() {
+      const url = this.el.dataset.statusUrl
+      const label = this.el.querySelector("[data-detection-status]")
+      if (!url || !label || this.disposed) return
+      this.statusAbort = new AbortController()
+      try {
+        const response = await fetch(url, {signal: this.statusAbort.signal, cache: "no-store"})
+        if (!response.ok) throw new Error("status unavailable")
+        const {status} = await response.json()
+        if (!this.disposed) label.textContent = ({loading: "Preparando detector…", active: "Detección activa · personas y autos", capacity: "Capacidad de detección alcanzada", saturated: "Detector saturado · reduce cámaras o prueba otro motor", error: "Detector sin conexión · pulsa reintentar"})[status] || "Esperando detector…"
+      } catch (error) {
+        if (!this.disposed && error.name !== "AbortError") label.textContent = "Estado del detector no disponible"
+      }
+      if (!this.disposed) this.statusTimer = schedule(() => this.pollDetection(), 2000)
     },
 
     open() {
@@ -72,6 +89,8 @@ export function createHlsPlayer(Hls, schedule = setTimeout, cancel = clearTimeou
 
     destroyed() {
       this.disposed = true
+      this.statusAbort?.abort()
+      if (this.statusTimer != null) cancel(this.statusTimer)
       if (this.retryTimer !== null) cancel(this.retryTimer)
       this.listeners.forEach(([name, callback]) => this.video.removeEventListener(name, callback))
       if (this.hls) this.hls.destroy()
