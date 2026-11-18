@@ -1,6 +1,16 @@
 defmodule Sentinel.MonitoringLogFilterTest do
   use ExUnit.Case, async: true
 
+  test "redacts structs in native pipeline crash reports without disabling the logger filter" do
+    event = %{
+      msg: {:report, %{exception: %RuntimeError{message: "rtsp://user:secret@host/private"}}}
+    }
+
+    result = Sentinel.Monitoring.LogFilter.filter(event, [])
+    refute inspect(result) =~ "secret"
+    assert inspect(result) =~ "REDACTED"
+  end
+
   test "redacts RTSP origins and credentials in strings and structured crash reports" do
     source = "rtsp://user:secret@10.0.0.1/private"
 
