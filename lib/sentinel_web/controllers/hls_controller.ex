@@ -9,12 +9,18 @@ defmodule SentinelWeb.HlsController do
       |> put_resp_header("cache-control", "no-store")
       |> put_resp_header("x-content-type-options", "nosniff")
 
-    case Monitoring.media_file(id, quality, filename) do
+    case Monitoring.media_file(id, quality, filename, Map.get(conn.path_params, "engine", "off")) do
       {:ok, body} ->
         conn |> put_resp_content_type(content_type(filename)) |> send_resp(200, body)
 
       {:error, reason}
-      when reason in [:unknown_camera, :unknown_quality, :invalid_filename, :enoent] ->
+      when reason in [
+             :unknown_camera,
+             :unknown_quality,
+             :unknown_engine,
+             :invalid_filename,
+             :enoent
+           ] ->
         send_resp(conn, 404, "Recurso no disponible")
 
       {:error, _reason} ->
@@ -22,6 +28,12 @@ defmodule SentinelWeb.HlsController do
         |> put_resp_header("retry-after", "3")
         |> send_resp(503, "Video no disponible. Reintenta en unos segundos.")
     end
+  end
+
+  def status(conn, %{"camera_id" => id, "quality" => quality, "engine" => engine}) do
+    conn
+    |> put_resp_header("cache-control", "no-store")
+    |> json(%{status: Monitoring.detection_status(id, quality, engine)})
   end
 
   defp content_type(filename) do

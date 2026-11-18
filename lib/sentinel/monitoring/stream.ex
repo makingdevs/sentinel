@@ -23,7 +23,13 @@ defmodule Sentinel.Monitoring.Stream do
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
-    {id, quality} = Keyword.fetch!(options, :key)
+
+    {id, quality, engine} =
+      case Keyword.fetch!(options, :key) do
+        {id, quality} -> {id, quality, "off"}
+        {id, quality, engine} -> {id, quality, engine}
+      end
+
     root = Keyword.get(options, :directory, Keyword.fetch!(Monitoring.config(), :hls_directory))
 
     directory =
@@ -31,11 +37,14 @@ defmodule Sentinel.Monitoring.Stream do
         root,
         id,
         quality,
+        engine,
         Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       ])
 
     state = %{
       directory: directory,
+      engine: engine,
+      detection_status: if(engine == "off", do: :off, else: :loading),
       source_url: Keyword.fetch!(options, :source_url),
       runner: Keyword.get(options, :pipeline_module, Sentinel.Monitoring.Pipeline),
       pipeline: nil,
@@ -59,6 +68,8 @@ defmodule Sentinel.Monitoring.Stream do
   def handle_continue(:connect, state), do: connect(state)
 
   @impl true
+  def handle_call(:status, _from, state), do: {:reply, state.detection_status, state}
+
   def handle_call({:file, filename}, _from, state) do
     result =
       if state.ready?,
@@ -66,6 +77,12 @@ defmodule Sentinel.Monitoring.Stream do
         else: {:error, state.error}
 
     {:reply, result, %{state | last_access: now()}}
+  end
+
+  @impl true
+  def handle_cast(:retry_detector, state) do
+    if state.pipeline, do: send(state.pipeline, :retry_detector)
+    {:noreply, state}
   end
 
   @impl true
@@ -120,6 +137,12 @@ defmodule Sentinel.Monitoring.Stream do
     end
   end
 
+  def handle_info({:detection_status, pid, status}, %{pipeline: pid} = state) do
+    {:noreply, %{state | detection_status: status}}
+  end
+
+  def handle_info({:detection_status, _old_pid, _status}, state), do: {:noreply, state}
+
   def handle_info({:pipeline_ready, _old_pid}, state), do: {:noreply, state}
   def handle_info({:pipeline_error, _old_pid, _reason}, state), do: {:noreply, state}
 
@@ -144,7 +167,8 @@ defmodule Sentinel.Monitoring.Stream do
       source_url: state.source_url,
       directory: state.directory,
       owner: self(),
-      generation: generation
+      generation: generation,
+      engine: state.engine
     }
 
     case state.runner.start(options) do
@@ -158,7 +182,8 @@ defmodule Sentinel.Monitoring.Stream do
              started_at: now(),
              last_progress: now(),
              progress_token: nil,
-             ready?: false
+             ready?: false,
+             detection_status: if(state.engine == "off", do: :off, else: :loading)
          }}
 
       {:error, _reason} ->

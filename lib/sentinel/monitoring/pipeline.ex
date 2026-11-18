@@ -35,10 +35,16 @@ defmodule Sentinel.Monitoring.Pipeline do
         spec =
           get_child(:source)
           |> via_out(Pad.ref(:output, track.control_path))
+          |> annotate(track, state)
           |> via_in(:input,
             options: [
               encoding:
-                if(String.upcase(track.rtpmap.encoding) == "H265", do: :H265, else: :H264),
+                if(
+                  Map.get(state, :engine, "off") == "off" and
+                    String.upcase(track.rtpmap.encoding) == "H265",
+                  do: :H265,
+                  else: :H264
+                ),
               track_name: "video_#{state.generation}",
               segment_duration: Membrane.Time.seconds(4)
             ]
@@ -65,5 +71,68 @@ defmodule Sentinel.Monitoring.Pipeline do
     {[terminate: :normal], state}
   end
 
+  def handle_child_notification({:detection_status, status}, :detector, _ctx, state) do
+    send(state.owner, {:detection_status, self(), status})
+    {[], state}
+  end
+
   def handle_child_notification(_notification, _child, _ctx, state), do: {[], state}
+
+  @impl true
+  def handle_info(:retry_detector, _ctx, state) do
+    if Map.get(state, :engine, "off") == "off",
+      do: {[], state},
+      else: {[notify_child: {:detector, :retry_detector}], state}
+  end
+
+  @doc false
+  def annotate(builder, track, state) do
+    if Map.get(state, :engine, "off") == "off" do
+      builder
+    else
+      builder =
+        case String.upcase(track.rtpmap.encoding) do
+          "H264" ->
+            builder
+            |> child(:input_parser, %Membrane.H264.Parser{
+              output_stream_structure: :annexb,
+              output_alignment: :au
+            })
+            |> child(:decoder, Membrane.H264.FFmpeg.Decoder)
+
+          "H265" ->
+            builder
+            |> child(:input_parser, %Membrane.H265.Parser{
+              output_stream_structure: :annexb,
+              output_alignment: :au
+            })
+            |> child(:decoder, Membrane.H265.FFmpeg.Decoder)
+        end
+
+      builder
+      |> via_in(:input, auto_demand_size: 1)
+      |> child(:to_rgb, %Membrane.FFmpeg.SWScale.Converter{format: :RGB, output_width: 640})
+      |> via_in(:input, auto_demand_size: 1)
+      |> child(:latest, %Sentinel.Detection.LatestFrame{
+        engine: state.engine,
+        generation: state.generation
+      })
+      |> via_in(:input, auto_demand_size: 1)
+      |> child(:detector, %Sentinel.Detection.Filter{
+        engine: state.engine,
+        generation: state.generation
+      })
+      |> via_in(:input, auto_demand_size: 1)
+      |> child(:drawer, Sentinel.Detection.Drawer)
+      |> via_in(:input, auto_demand_size: 1)
+      |> child(:to_i420, %Membrane.FFmpeg.SWScale.Converter{format: :I420})
+      |> via_in(:input, auto_demand_size: 1)
+      |> child(:encoder, %Membrane.H264.FFmpeg.Encoder{
+        preset: :ultrafast,
+        tune: :zerolatency,
+        max_b_frames: 0,
+        gop_size: 50
+      })
+    end
+  end
 end

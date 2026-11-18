@@ -23,6 +23,8 @@ defmodule SentinelWeb.Router do
 
   # Same-origin HLS resources; they are binary media, not browser HTML.
   scope "/hls", SentinelWeb do
+    get "/:camera_id/:quality/:engine/status", HlsController, :status
+    get "/:camera_id/:quality/:engine/:filename", HlsController, :show
     get "/:camera_id/:quality/:filename", HlsController, :show
   end
 

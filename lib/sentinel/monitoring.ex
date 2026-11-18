@@ -35,6 +35,40 @@ defmodule Sentinel.Monitoring do
     end
   end
 
+  def player_url(id, quality, "off"), do: player_url(id, quality)
+
+  def player_url(id, quality, engine) do
+    with :ok <- validate_selection(id, quality),
+         :ok <- Sentinel.Detection.validate_engine(engine),
+         true <- Sentinel.Detection.available?(engine) do
+      {:ok, "/hls/#{id}/#{quality}/#{engine}/index.m3u8"}
+    else
+      false -> {:error, :detector_unavailable}
+      error -> error
+    end
+  end
+
+  def retry_detector(id, quality, engine) do
+    case Registry.lookup(Sentinel.Monitoring.Registry, stream_key(id, quality, engine)) do
+      [{pid, _}] -> GenServer.cast(pid, :retry_detector)
+      [] -> :ok
+    end
+  end
+
+  def detection_status(id, quality, engine) do
+    with :ok <- validate_selection(id, quality),
+         true <- Sentinel.Detection.valid_engine?(engine) do
+      case Registry.lookup(Sentinel.Monitoring.Registry, stream_key(id, quality, engine)) do
+        [{pid, _}] -> GenServer.call(pid, :status)
+        [] -> :loading
+      end
+    else
+      _ -> :error
+    end
+  catch
+    :exit, _ -> :error
+  end
+
   def source_url(id, quality) do
     with :ok <- validate_selection(id, quality) do
       sources = Keyword.get(config(), :sources, %{})
@@ -61,17 +95,24 @@ defmodule Sentinel.Monitoring do
     end
   end
 
-  def media_file(id, quality, filename) do
+  def media_file(id, quality, filename), do: media_file(id, quality, filename, "off")
+
+  def media_file(id, quality, filename, engine) do
     with :ok <- validate_selection(id, quality),
+         :ok <- Sentinel.Detection.validate_engine(engine),
+         true <- Sentinel.Detection.available?(engine),
          :ok <- validate_filename(filename),
          {:ok, url} <- source_url(id, quality),
-         {:ok, pid} <- ensure_stream(id, quality, url) do
+         {:ok, pid} <- ensure_stream(id, quality, url, engine) do
       Stream.file(pid, filename)
+    else
+      false -> {:error, :detector_unavailable}
+      error -> error
     end
   end
 
-  defp ensure_stream(id, quality, url) do
-    key = {id, quality}
+  defp ensure_stream(id, quality, url, engine) do
+    key = stream_key(id, quality, engine)
 
     case Registry.lookup(Sentinel.Monitoring.Registry, key) do
       [{pid, _}] ->
@@ -92,6 +133,9 @@ defmodule Sentinel.Monitoring do
         end
     end
   end
+
+  defp stream_key(id, quality, "off"), do: {id, quality}
+  defp stream_key(id, quality, engine), do: {id, quality, engine}
 
   defp validate_filename(filename) when is_binary(filename) do
     if Regex.match?(~r/\A[a-zA-Z0-9_-]+\.(m3u8|m4s|mp4)\z/, filename),
