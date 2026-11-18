@@ -22,3 +22,9 @@ Ready to run in production? Please [check our deployment guides](https://phoenix
 La cuadrícula `/cameras` usa RTSP → Membrane → HLS servido por Sentinel.
 Consulta [configuración, ejecución y límites](docs/monitoring.md).
 Instala el reproductor con `npm ci --prefix assets` antes de compilar assets.
+
+## Personas y autos
+
+La detección puede ejecutarse con Python/Ultralytics o Elixir/YOLO/Ortex, con un
+selector por cámara y cajas dentro del video HLS. Consulta
+[instalación, ejecución y comparación](docs/detection.md).
