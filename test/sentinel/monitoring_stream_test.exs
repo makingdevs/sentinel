@@ -1,10 +1,13 @@
 defmodule Sentinel.MonitoringStreamTest do
-  use ExUnit.Case, async: false
+  use Sentinel.DataCase, async: false
+  import Sentinel.MonitoringFixtures
 
   alias Sentinel.Monitoring
   alias Sentinel.Monitoring.Stream, as: CameraStream
 
   setup do
+    camera_catalog_fixture()
+    camera_source_fixture("division-1", "secundaria", "rtsp://example.test/video")
     config = Monitoring.config()
 
     directory =
@@ -21,8 +24,7 @@ defmodule Sentinel.MonitoringStreamTest do
       :monitoring,
       Keyword.merge(config,
         hls_directory: directory,
-        pipeline_module: Sentinel.TestMediaPipeline,
-        sources: %{"division-1" => %{"secundaria" => "rtsp://example.test/video"}}
+        pipeline_module: Sentinel.TestMediaPipeline
       )
     )
 

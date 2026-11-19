@@ -1,12 +1,22 @@
 defmodule Sentinel.Monitoring do
   @moduledoc "Public catalog and same-origin HLS URLs. RTSP sources remain server-side."
 
-  alias Sentinel.Monitoring.Stream
+  import Ecto.Query
+
+  alias Sentinel.Monitoring.{Camera, CameraSource, Stream}
+  alias Sentinel.Repo
 
   @qualities ~w(secundaria principal)
 
   def config, do: Application.fetch_env!(:sentinel, :monitoring)
-  def list_cameras, do: Keyword.fetch!(config(), :cameras)
+
+  def list_cameras do
+    Repo.all(
+      from c in Camera, order_by: c.id, select: %{id: c.id, branch: c.branch, label: c.label}
+    )
+  rescue
+    _ in [Postgrex.Error, DBConnection.ConnectionError] -> []
+  end
 
   def camera_options do
     list_cameras()
@@ -15,10 +25,16 @@ defmodule Sentinel.Monitoring do
   end
 
   def fetch_camera(id) when is_binary(id) do
-    case Enum.find(list_cameras(), &(&1.id == id)) do
+    case Repo.one(
+           from c in Camera,
+             where: c.id == ^id,
+             select: %{id: c.id, branch: c.branch, label: c.label}
+         ) do
       nil -> {:error, :unknown_camera}
       camera -> {:ok, camera}
     end
+  rescue
+    _ in [Postgrex.Error, DBConnection.ConnectionError] -> {:error, :catalog_unavailable}
   end
 
   def fetch_camera(_id), do: {:error, :unknown_camera}
@@ -71,28 +87,24 @@ defmodule Sentinel.Monitoring do
 
   def source_url(id, quality) do
     with :ok <- validate_selection(id, quality) do
-      sources = Keyword.get(config(), :sources, %{})
-
       source =
-        case sources do
-          %{^id => %{^quality => url}} -> url
-          _ -> nil
-        end
+        Repo.one(
+          from(s in CameraSource,
+            where: s.camera_id == ^id and s.quality == ^quality,
+            select: s.url,
+            limit: 1
+          ),
+          log: false
+        )
 
-      case source do
-        url when is_binary(url) ->
-          case URI.new(url) do
-            {:ok, %URI{scheme: "rtsp", host: host}} when is_binary(host) and host != "" ->
-              {:ok, url}
-
-            _ ->
-              {:error, :invalid_source}
-          end
-
-        _ ->
-          {:error, :source_not_configured}
+      cond do
+        is_nil(source) -> {:error, :source_not_configured}
+        CameraSource.valid_url?(source) -> {:ok, source}
+        true -> {:error, :invalid_source}
       end
     end
+  rescue
+    _ in [Postgrex.Error, DBConnection.ConnectionError] -> {:error, :source_unavailable}
   end
 
   def media_file(id, quality, filename), do: media_file(id, quality, filename, "off")

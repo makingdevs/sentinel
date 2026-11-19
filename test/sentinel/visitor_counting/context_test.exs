@@ -1,5 +1,10 @@
 defmodule Sentinel.VisitorCounting.ContextTest do
   use Sentinel.DataCase, async: false
+  import Sentinel.MonitoringFixtures
+  setup :camera_catalog_fixture_setup
+
+  defp camera_catalog_fixture_setup(_context), do: camera_catalog_fixture()
+
   alias Sentinel.VisitorCounting
   alias Sentinel.VisitorCounting.{Persistence, Retention, Snapshots}
 

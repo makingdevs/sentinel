@@ -1,5 +1,10 @@
 defmodule SentinelWeb.CountingCalibrationTest do
   use SentinelWeb.ConnCase, async: true
+  import Sentinel.MonitoringFixtures
+  setup :camera_catalog_fixture_setup
+
+  defp camera_catalog_fixture_setup(_context), do: camera_catalog_fixture()
+
   import Phoenix.LiveViewTest
   alias Sentinel.VisitorCounting
 

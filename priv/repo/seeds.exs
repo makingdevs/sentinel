@@ -1,11 +1,7 @@
-# Script for populating the database. You can run it as:
-#
-#     mix run priv/repo/seeds.exs
-#
-# Inside the script, you can read and write to any of your
-# repositories directly:
-#
-#     Sentinel.Repo.insert!(%Sentinel.SomeSchema{})
-#
-# We recommend using the bang functions (`insert!`, `update!`
-# and so on) as they will fail if something goes wrong.
+case Sentinel.Monitoring.SeedImporter.import_file(System.get_env("CAMERA_RTSP_SOURCES_FILE")) do
+  {:ok, %{cameras: cameras, sources: sources}} ->
+    IO.puts("Seeded #{cameras} cameras and #{sources} sources")
+
+  {:error, message} ->
+    raise message
+end

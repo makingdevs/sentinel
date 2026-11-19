@@ -1,9 +1,14 @@
 defmodule SentinelWeb.HlsControllerTest do
   use SentinelWeb.ConnCase, async: false
+  import Sentinel.MonitoringFixtures
+  setup :camera_catalog_fixture_setup
+
+  defp camera_catalog_fixture_setup(_context), do: camera_catalog_fixture()
 
   alias Sentinel.Monitoring
 
   setup do
+    camera_source_fixture("division-1", "secundaria", "rtsp://user:secret@example.test/private")
     original = Monitoring.config()
 
     directory =
@@ -20,13 +25,13 @@ defmodule SentinelWeb.HlsControllerTest do
       :monitoring,
       Keyword.merge(original,
         hls_directory: directory,
-        pipeline_module: Sentinel.TestMediaPipeline,
-        sources: %{"division-1" => %{"secundaria" => "rtsp://user:secret@example.test/private"}}
+        pipeline_module: Sentinel.TestMediaPipeline
       )
     )
 
     on_exit(fn ->
-      for {pid, _} <- Registry.lookup(Sentinel.Monitoring.Registry, {"division-1", "secundaria"}) do
+      for quality <- ~w(principal secundaria),
+          {pid, _} <- Registry.lookup(Sentinel.Monitoring.Registry, {"division-1", quality}) do
         DynamicSupervisor.terminate_child(Sentinel.Monitoring.Supervisor, pid)
       end
 
@@ -73,6 +78,19 @@ defmodule SentinelWeb.HlsControllerTest do
     end
 
     assert get(conn, "/hls/division-1/secundaria/missing.m4s").status == 404
+  end
+
+  test "both HLS qualities resolve their distinct persisted sources", %{conn: conn} do
+    camera_source_fixture("division-1", "principal", "rtsp://example.test/main")
+
+    for {quality, expected} <- [
+          {"principal", "rtsp://example.test/main"},
+          {"secundaria", "rtsp://user:secret@example.test/private"}
+        ] do
+      assert get(conn, "/hls/division-1/#{quality}/index.m3u8").status == 503
+      assert_receive {:media_started, _, options}
+      assert options.source_url == expected
+    end
   end
 
   test "unknown cameras, qualities and extensions cannot access files", %{conn: conn} do

@@ -1,11 +1,18 @@
 defmodule Sentinel.VisitorCounting.ManagerTest do
   use Sentinel.DataCase, async: false
+  import Sentinel.MonitoringFixtures
+  setup :camera_catalog_fixture_setup
+
+  defp camera_catalog_fixture_setup(_context), do: camera_catalog_fixture()
+
   alias Sentinel.{Monitoring, VisitorCounting}
   alias Sentinel.VisitorCounting.Manager
 
   setup do
     previous = Application.get_env(:sentinel, :visitor_counting, [])
     monitoring = Monitoring.config()
+    camera_source_fixture("division-1", "secundaria", "rtsp://example.test/1")
+    camera_source_fixture("division-2", "secundaria", "rtsp://example.test/2")
 
     Application.put_env(:sentinel, :visitor_counting,
       pipeline_module: Sentinel.TestMediaPipeline,
@@ -17,11 +24,7 @@ defmodule Sentinel.VisitorCounting.ManagerTest do
       :sentinel,
       :monitoring,
       Keyword.merge(monitoring,
-        pipeline_module: Sentinel.TestMediaPipeline,
-        sources: %{
-          "division-1" => %{"secundaria" => "rtsp://example.test/1"},
-          "division-2" => %{"secundaria" => "rtsp://example.test/2"}
-        }
+        pipeline_module: Sentinel.TestMediaPipeline
       )
     )
 
@@ -78,6 +81,25 @@ defmodule Sentinel.VisitorCounting.ManagerTest do
     monitor = Process.monitor(second)
     stop_supervised!(Manager)
     assert_receive {:DOWN, ^monitor, :process, ^second, :normal}
+  end
+
+  test "counter re-resolves PostgreSQL source after reconnect and fails safely when absent" do
+    VisitorCounting.configure_rule("division-1", %{enabled: true})
+    manager = start_supervised!({Manager, []})
+    :sys.get_state(manager)
+    assert_receive {:media_started, first, options}
+    assert options.source_url == "rtsp://example.test/1"
+    query = from s in Sentinel.Monitoring.CameraSource, where: s.camera_id == "division-1"
+    Repo.update_all(query, [set: [url: "rtsp://example.test/updated"]], log: false)
+    GenServer.stop(first, :normal)
+    assert_receive {:media_started, second, next}, 1_000
+    assert next.source_url == "rtsp://example.test/updated"
+    Repo.delete_all(query)
+    GenServer.stop(second, :normal)
+    [{camera, _}] = Registry.lookup(Sentinel.VisitorCounting.Registry, "division-1")
+    _ = :sys.get_state(camera)
+    assert Manager.status("division-1") == :error
+    refute_received {:media_started, _, _}
   end
 
   test "opening HLS viewers cannot duplicate the canonical counter" do

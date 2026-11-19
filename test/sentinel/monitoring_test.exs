@@ -1,20 +1,14 @@
 defmodule Sentinel.MonitoringTest do
-  use ExUnit.Case, async: false
+  use Sentinel.DataCase, async: false
+  import Sentinel.MonitoringFixtures
+  setup :camera_catalog_fixture_setup
+
+  defp camera_catalog_fixture_setup(_context), do: camera_catalog_fixture()
 
   alias Sentinel.Monitoring
 
   setup do
-    original = Monitoring.config()
-
-    Application.put_env(
-      :sentinel,
-      :monitoring,
-      Keyword.put(original, :sources, %{
-        "division-1" => %{"secundaria" => "rtsp://user:secret@127.0.0.1:8554/private"}
-      })
-    )
-
-    on_exit(fn -> Application.put_env(:sentinel, :monitoring, original) end)
+    camera_source_fixture("division-1", "secundaria", "rtsp://user:secret@127.0.0.1:8554/private")
     :ok
   end
 
@@ -51,17 +45,23 @@ defmodule Sentinel.MonitoringTest do
              Monitoring.source_url("division-1", "secundaria")
 
     assert {:error, :source_not_configured} = Monitoring.source_url("division-1", "principal")
-    config = Monitoring.config()
 
     for source <- ["file:///etc/passwd", "http://example.com", "rtsp:///missing-host"] do
-      Application.put_env(
-        :sentinel,
-        :monitoring,
-        Keyword.put(config, :sources, %{"division-1" => %{"secundaria" => source}})
-      )
+      Repo.update_all(Sentinel.Monitoring.CameraSource, [set: [url: source]], log: false)
 
       assert {:error, :invalid_source} = Monitoring.source_url("division-1", "secundaria")
     end
+  end
+
+  test "missing camera and source keep safe failure shapes" do
+    assert {:error, :unknown_camera} = Monitoring.source_url("missing", "principal")
+    assert {:error, :unknown_quality} = Monitoring.source_url("division-1", "other")
+    assert {:error, :source_not_configured} = Monitoring.source_url("division-2", "secundaria")
+    Repo.delete_all(Sentinel.Monitoring.CameraSource)
+    Repo.delete_all(Sentinel.Monitoring.Camera)
+    assert Monitoring.list_cameras() == []
+    assert Monitoring.camera_options() == []
+    assert {:error, :unknown_camera} = Monitoring.fetch_camera("division-1")
   end
 
   test "rejects unsafe filenames before opening a source" do

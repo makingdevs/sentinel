@@ -1,8 +1,14 @@
 defmodule Sentinel.Detection.StreamIsolationTest do
-  use ExUnit.Case, async: false
+  use Sentinel.DataCase, async: false
+  import Sentinel.MonitoringFixtures
+  setup :camera_catalog_fixture_setup
+
+  defp camera_catalog_fixture_setup(_context), do: camera_catalog_fixture()
+
   alias Sentinel.Monitoring
 
   setup do
+    camera_source_fixture("division-1", "secundaria", "rtsp://example.test/private")
     previous = Monitoring.config()
     detection = Application.get_env(:sentinel, :detection, [])
     root = Path.join(System.tmp_dir!(), "detector-stream-#{System.unique_integer([:positive])}")
@@ -21,8 +27,7 @@ defmodule Sentinel.Detection.StreamIsolationTest do
       :monitoring,
       Keyword.merge(previous,
         hls_directory: root,
-        pipeline_module: Sentinel.TestMediaPipeline,
-        sources: %{"division-1" => %{"secundaria" => "rtsp://example.test/private"}}
+        pipeline_module: Sentinel.TestMediaPipeline
       )
     )
 

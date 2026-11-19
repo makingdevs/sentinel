@@ -12,11 +12,19 @@ Logger.configure(level: :error)
     max_children: 8
   )
 
-path = System.get_env("CAMERA_RTSP_SOURCES_FILE", "tmp/camera_rtsp_sources.json")
-sources = Jason.decode!(File.read!(path))
-id = System.get_env("DETECTION_CAMERA", sources |> Map.keys() |> Enum.sort() |> hd())
+{:ok, _repo} = Sentinel.Repo.start_link()
+id = System.get_env("DETECTION_CAMERA", "division-1")
 quality = System.get_env("DETECTION_QUALITY", "secundaria")
-url = sources |> Map.fetch!(id) |> Map.fetch!(quality)
+
+url =
+  case Sentinel.Monitoring.source_url(id, quality) do
+    {:ok, url} ->
+      url
+
+    {:error, reason} ->
+      raise "Camera source unavailable (#{reason}); migrate and seed the database first"
+  end
+
 engines = System.argv()
 engines = if engines == [], do: ["off", "python", "elixir"], else: engines
 

@@ -1,20 +1,6 @@
 import Config
 
-# Sources are private runtime configuration, separate from the public catalog.
-rtsp_sources =
-  case System.get_env("CAMERA_RTSP_SOURCES_FILE") do
-    nil ->
-      %{}
-
-    path ->
-      case path |> File.read!() |> Jason.decode() do
-        {:ok, sources} when is_map(sources) -> sources
-        _ -> raise "CAMERA_RTSP_SOURCES_FILE must contain a JSON object"
-      end
-  end
-
 config :sentinel, :monitoring,
-  sources: rtsp_sources,
   hls_directory: System.get_env("CAMERA_HLS_DIRECTORY", Path.expand("../tmp/hls", __DIR__))
 
 config :sentinel, :detection,
