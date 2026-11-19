@@ -22,42 +22,77 @@ servir HTTPS y tener conectividad a las fuentes RTSP.
 
 ## Configurar las fuentes
 
-El catálogo público está en `config/config.exs`. Las fuentes privadas se cargan
-sólo en runtime desde `CAMERA_RTSP_SOURCES_FILE`, un archivo JSON fuera del código
-versionado. No se lee Downloads en ejecución. Formato mínimo:
+El catálogo y las conexiones se almacenan en PostgreSQL, en `cameras` y
+`camera_sources`. `Sentinel.Monitoring` expone sólo los metadatos públicos y resuelve
+las fuentes dentro del servidor. El arranque normal no lee archivos JSON ni necesita
+`CAMERA_RTSP_SOURCES_FILE`.
+
+Para bootstrap, prepara un JSON **local y privado** con los ocho IDs `division-1`
+a `division-4` y `lavirgen-1` a `lavirgen-4`. Cada ID debe incluir **ambas** calidades,
+`principal` y `secundaria`, con URLs de esquema `rtsp` y host. Esta entrada ilustra
+el formato; repítelo para las ocho cámaras:
 
 ```json
 {
   "division-1": {
     "secundaria": "rtsp://SERVIDOR:8554/RUTA_SECUNDARIA",
     "principal": "rtsp://SERVIDOR:8554/RUTA_PRINCIPAL"
-  },
-  "lavirgen-1": {
-    "secundaria": "rtsp://OTRO_SERVIDOR:8554/RUTA_SECUNDARIA"
   }
 }
 ```
 
-Se admiten los IDs `division-1` a `division-4` y `lavirgen-1` a `lavirgen-4`;
-las calidades son `secundaria` y `principal`. Configura sólo fuentes conocidas,
-con permisos restringidos sobre el JSON (por ejemplo 0600). Si la URL necesita
-usuario/contraseña, codifica sus caracteres reservados en el userinfo. La
-aplicación no envía esas URLs al navegador y redacta orígenes RTSP y campos de
-credenciales de los eventos de log.
+El archivo existente `tmp/camera_rtsp_sources.json` está ignorado por Git.
+Restringe sus permisos (0600), no lo imprimas ni lo agregues al repositorio. Los
+hosts y paths también identifican feeds privados aunque no incluyan credenciales.
+Si la URL necesita usuario/contraseña, codifica sus caracteres reservados.
+
+Orden para cada entorno, incluida una actualización de una instalación existente:
+
+1. Instala dependencias y assets.
+2. Aplica las migraciones a la base de datos del entorno.
+3. Proporciona el JSON privado **sólo para ejecutar seeds** contra esa misma base.
+4. Inicia o actualiza la aplicación sin la variable del JSON.
 
 ```sh
 npm ci --prefix assets
 mix deps.get
-CAMERA_RTSP_SOURCES_FILE=/ruta/privada/cameras.json mix phx.server
+mix ecto.create
+mix ecto.migrate
+CAMERA_RTSP_SOURCES_FILE=/ruta/privada/cameras.json mix run priv/repo/seeds.exs
+# La asignación anterior sólo aplica al comando de seeds.
+PORT=4012 mix phx.server
 ```
 
-Para la prueba local se preparó `tmp/camera_rtsp_sources.json`, ignorado por Git,
-con los paths RTSP ya conocidos de MediaMTX. El servidor de prueba usa puerto
-4012. Para reproducir ese arranque:
+`mix setup` también ejecuta seeds y por tanto requiere la variable durante ese
+comando. En producción usa la configuración de PostgreSQL del entorno
+(`MIX_ENV=prod`, `DATABASE_URL`, etc.) tanto al migrar como al sembrar. Para releases
+sin Mix ejecuta la migración mediante el mecanismo de despliegue y llama a
+`Sentinel.Monitoring.SeedImporter.import_file/1` en un nodo con Repo iniciado y
+acceso temporal al archivo. No actives los workflows de cámaras antes de sembrar.
+
+Seeds falla con un mensaje seguro si falta el archivo, hay JSON inválido o falta
+una cámara/calidad válida; valida toda la entrada antes de escribir. Se puede
+repetir: actualiza sucursal/etiqueta y URL/fecha de actualización mediante claves
+explícitas, conserva IDs/fechas de creación y no borra filas ajenas. No agrega UI
+de edición ni reescribe reglas o eventos históricos de conteo.
+
+La aplicación arranca con la base vacía, pero sin catálogo no hay cámaras y las
+fuentes ausentes fallan de forma segura. PostgreSQL debe estar disponible para
+descubrir cámaras e iniciar streams. Las URLs permanecen en el servidor, con
+logging SQL desactivado para lecturas/escrituras de fuentes y redacción RTSP en
+logs. La base de datos y sus respaldos contienen endpoints sensibles: restringe
+su acceso; no hay cifrado adicional de las URLs en la aplicación.
+
+Después de sembrar, verifica sin la variable de runtime:
 
 ```sh
-CAMERA_RTSP_SOURCES_FILE="$PWD/tmp/camera_rtsp_sources.json" PORT=4012 mix phx.server
+env -u CAMERA_RTSP_SOURCES_FILE bash scripts/detection/smoke.sh off
 ```
+
+El smoke resuelve `division-1` / `secundaria` a través de Monitoring y PostgreSQL;
+usa `DETECTION_CAMERA` y `DETECTION_QUALITY` para otra selección. Para todos los
+motores omite `off`. Comprueba además HLS en `/cameras` y el contador habilitado
+sin espectadores conforme a [operación de conteo](visitor-counting.md).
 
 `CAMERA_HLS_DIRECTORY` permite escoger un directorio escribible. Su valor por
 defecto es `tmp/hls` dentro de la aplicación. Debe ser privado, no un directorio

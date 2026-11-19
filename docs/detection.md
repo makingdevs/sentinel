@@ -26,7 +26,7 @@ mix compile
 
 Las comillas hacen que `CXX` incluya tanto el compilador como sus opciones. El primer comando fuerza la recompilación de EXLA; el segundo continúa la compilación de la aplicación.
 
-`server.sh` utiliza el puerto 4013 por defecto. Cambiarlo con `PORT`. Las fuentes se leen desde `CAMERA_RTSP_SOURCES_FILE` (por defecto `tmp/camera_rtsp_sources.json`), con la misma configuración privada del monitoreo existente. Las credenciales RTSP no se envían al navegador.
+`server.sh` utiliza el puerto 4013 por defecto. Cambiarlo con `PORT`. Las fuentes se resuelven desde PostgreSQL. Antes del primer arranque, migra y ejecuta seeds con el JSON privado según [monitoreo](monitoring.md#configurar-las-fuentes); `server.sh` no necesita `CAMERA_RTSP_SOURCES_FILE`. Las credenciales RTSP no se envían al navegador.
 
 Variables de ubicación opcionales:
 
@@ -64,7 +64,7 @@ bash scripts/detection/benchmark.sh
 mix precommit
 ```
 
-`smoke.sh` conecta la primera cámara configurada, calidad secundaria, y prueba cada motor 35s. Opciones: `DETECTION_CAMERA`, `DETECTION_QUALITY`; se pueden pasar motores como argumentos, por ejemplo `bash scripts/detection/smoke.sh python elixir`. Usa archivos de salida temporales, sin modificar la configuración de las cámaras.
+`smoke.sh` conecta `division-1` desde PostgreSQL, calidad secundaria, y prueba cada motor 35s. Opciones: `DETECTION_CAMERA`, `DETECTION_QUALITY`; se pueden pasar motores como argumentos, por ejemplo `bash scripts/detection/smoke.sh python elixir`. Usa archivos de salida temporales, sin modificar la configuración de las cámaras.
 
 El benchmark usa `Superior.mp4` del taller, convertido una sola vez a 640px/25FPS y reproducido al mismo ritmo en cada pipeline. Se puede indicar `DETECTION_WORKSHOP_DIRECTORY`; de lo contrario busca el taller en `~/Downloads`. La ejecución predeterminada usa `MIX_ENV=prod` y no arranca el endpoint ni el Repo. Es serial: 1/4/8 streams, original/Python/Elixir, tres repeticiones, 10s de calentamiento y 60s de medición por caso. Tarda aproximadamente 32 minutos, más instalación y preparación. No ejecutar otros procesos pesados durante la medición. La entrada del benchmark ya está a640px: una cámara RTSP de resolución principal mayor exige más decodificación y no queda representada por esa matriz. Empezar con calidad secundaria.
 

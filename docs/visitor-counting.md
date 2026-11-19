@@ -6,9 +6,9 @@ Python/Elixir existente. No guarda video ni requiere abrir `/cameras`.
 
 ## Preparación y calibración
 
-1. Configura `CAMERA_RTSP_SOURCES_FILE` como indica [monitoreo](monitoring.md).
+1. Prepara el JSON privado para seeds como indica [monitoreo](monitoring.md); no se usa durante el arranque normal.
    Instala los modelos según [detección](detection.md).
-2. Ejecuta `mix ecto.migrate` y `mix phx.server`.
+2. Migra y siembra las cámaras según [bootstrap de monitoreo](monitoring.md#configurar-las-fuentes); luego ejecuta `mix phx.server` sin la variable del JSON. El contador obtiene la fuente secundaria desde PostgreSQL.
 3. Desde localhost abre `/cameras`, agrega una cámara y pulsa **Configurar conteo**.
    Dibuja la línea, arrastra sus extremos o muévela completa. Los campos numéricos
    permiten calibrar sin arrastrar. Los extremos se guardan normalizados de 0 a 1,
