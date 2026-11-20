@@ -54,6 +54,39 @@ defmodule Sentinel.VisitorCounting.ContextTest do
     assert [] = VisitorCounting.list_events(%{}, 2)
   end
 
+  test "snapshot provenance round trips without inventing historical metadata" do
+    assert {:ok, historical, :inserted} = Persistence.save(attrs("historical"), "jpeg")
+    assert historical.snapshot_quality == nil
+    assert historical.snapshot_received_at == nil
+
+    for {quality, reason} <- [{"primary", nil}, {"secondary", "stale"}] do
+      metadata = %{
+        snapshot_quality: quality,
+        snapshot_received_at: DateTime.utc_now(),
+        snapshot_width: 1920,
+        snapshot_height: 1080,
+        snapshot_fallback_reason: reason,
+        tracking_width: 640,
+        tracking_height: 360
+      }
+
+      assert {:ok, event, :inserted} =
+               Persistence.save(Map.merge(attrs(quality), metadata), "jpeg")
+
+      stored = VisitorCounting.get_event(event.id)
+      assert Map.take(stored, Map.keys(metadata)) == metadata
+    end
+
+    for invalid <- [
+          %{snapshot_quality: "other"},
+          %{snapshot_width: 0},
+          %{snapshot_quality: "secondary"},
+          %{snapshot_fallback_reason: "unknown"}
+        ] do
+      refute Sentinel.VisitorCounting.PassageEvent.changeset(Map.merge(attrs("invalid"), invalid)).valid?
+    end
+  end
+
   test "concurrent retries return one row and one image", %{root: root} do
     supervisor = start_supervised!(Task.Supervisor)
 
