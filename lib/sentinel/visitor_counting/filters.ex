@@ -6,16 +6,23 @@ defmodule Sentinel.VisitorCounting.Filters do
   embedded_schema do
     field :camera_id, :string, default: ""
     field :direction, :string, default: ""
+    field :mode, :string, default: "range"
+    field :day, :date
     field :from, :date
     field :until, :date
   end
 
   def changeset(attrs) do
-    %__MODULE__{from: Date.utc_today(), until: Date.utc_today()}
-    |> cast(attrs, [:camera_id, :direction, :from, :until], empty_values: [])
-    |> validate_required([:from, :until])
+    %__MODULE__{from: Date.utc_today(), until: Date.utc_today(), day: Date.utc_today()}
+    |> cast(attrs, [:camera_id, :direction, :from, :until, :mode, :day], empty_values: [])
+    |> validate_required([:from, :until, :day, :mode])
+    |> validate_inclusion(:mode, ["daily", "range"])
     |> validate_inclusion(:direction, ["", "entry", "exit"])
-    |> validate_inclusion(:camera_id, ["" | Enum.map(Sentinel.Monitoring.list_cameras(), & &1.id)])
+    |> validate_change(:camera_id, fn :camera_id, id ->
+      if id == "" or Enum.any?(Sentinel.Monitoring.list_cameras(), &(&1.id == id)),
+        do: [],
+        else: [camera_id: "es inválida"]
+    end)
     |> validate_range()
   end
 

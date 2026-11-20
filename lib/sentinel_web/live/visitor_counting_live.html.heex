@@ -18,22 +18,53 @@
     id="passage-detail"
     class="mb-8 rounded-2xl border border-teal-300/20 bg-slate-900 p-5"
   >
+    <.link
+      id="visitor-close-detail"
+      patch={history_path(@url_params)}
+      class="mb-4 inline-flex items-center gap-2 text-sm text-teal-200 hover:text-teal-100"
+    ><.icon name="hero-arrow-left" class="size-4" /> Volver a las imágenes</.link>
     <h2 class="mb-3 font-semibold">
-      Evento #{@event.id} · {@event.camera_id} · {@event.direction} · {@event.crossed_at}
+      Evento #{@event.id} · {@event.camera_id} · {@event.direction}
     </h2>
     <img
       src={"/visitors/events/#{@event.id}/snapshot"}
       alt="Captura del cruce"
-      class="max-h-[600px] rounded-xl"
+      class="max-h-[80vh] w-full rounded-xl bg-black object-contain"
     />
+    <.snapshot_provenance event={@event} detail />
     <p class="mt-3 text-sm text-slate-400">Confianza: {round(@event.confidence * 100)}%</p>
   </section>
+  <nav class="mb-5 flex gap-2" aria-label="Modo del historial">
+    <.link
+      id="visitor-mode-daily"
+      patch={mode_path(@url_params, "daily")}
+      aria-current={if @filters.mode == "daily", do: "page"}
+      class="rounded-lg border border-teal-300/30 px-4 py-2 text-sm text-teal-200 transition hover:bg-teal-300/10"
+    >Actividad diaria</.link>
+    <.link
+      id="visitor-mode-range"
+      patch={mode_path(@url_params, "range")}
+      aria-current={if @filters.mode == "range", do: "page"}
+      class="rounded-lg border border-white/10 px-4 py-2 text-sm transition hover:bg-white/5"
+    >Rango de fechas</.link>
+  </nav>
   <.form
     for={@form}
     id="visitor-filters"
     phx-submit="filter"
     class="mb-7 grid gap-4 rounded-2xl border border-white/10 bg-slate-900 p-5 sm:grid-cols-2 lg:grid-cols-5"
   >
+    <.input field={@form[:mode]} type="hidden" />
+    <.input :if={@filters.mode == "daily"} field={@form[:from]} type="hidden" />
+    <.input :if={@filters.mode == "daily"} field={@form[:until]} type="hidden" />
+    <.input :if={@filters.mode == "range"} field={@form[:day]} type="hidden" />
+    <.input
+      :if={@filters.mode == "daily"}
+      field={@form[:day]}
+      type="date"
+      label="Día (UTC)"
+      class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+    />
     <.input
       field={@form[:camera_id]}
       type="select"
@@ -42,12 +73,14 @@
       class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
     />
     <.input
+      :if={@filters.mode == "range"}
       field={@form[:from]}
       type="date"
       label="Desde (UTC)"
       class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
     />
     <.input
+      :if={@filters.mode == "range"}
       field={@form[:until]}
       type="date"
       label="Hasta (UTC)"
@@ -78,8 +111,133 @@
       </p>
     </div>
   </div>
+  <p :if={@loading?} id="visitor-loading" role="status" class="mb-4 text-sm text-teal-200">
+    Consultando actividad…
+  </p>
+  <div
+    :if={@query_error?}
+    id="visitor-query-error"
+    role="alert"
+    class="mb-5 rounded-xl border border-rose-300/30 p-4 text-sm text-rose-200"
+  >
+    No se pudo consultar el historial.
+    <button id="visitor-retry" phx-click="retry" class="underline">Reintentar</button>
+  </div>
+  <p
+    :if={@selection_notice?}
+    id="visitor-selection-notice"
+    role="status"
+    class="mb-4 text-sm text-amber-200"
+  >
+    La selección cambió o ya no está disponible. Mostramos el día completo.
+  </p>
+  <section
+    :if={@filters.mode == "daily"}
+    id="daily-timeline"
+    class="mb-8 rounded-2xl border border-white/10 bg-slate-900 p-4 sm:p-6"
+    aria-label="Actividad de imágenes del día UTC"
+  >
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-semibold">Actividad del {@filters.day}</h2><p class="mt-1 text-xs text-slate-400">
+          {@image_count} imágenes · {@group_count} grupos · intervalos de 5 minutos · UTC
+        </p>
+      </div>
+      <button
+        :if={@selection}
+        id="visitor-reset-selection"
+        phx-click="reset_selection"
+        class="rounded-lg border border-teal-300/30 px-3 py-2 text-sm text-teal-200 transition hover:bg-teal-300/10"
+      >Ver todo el día</button>
+    </div>
+    <div class="mt-6 overflow-x-auto pb-2">
+      <div
+        id="visitor-density"
+        class="grid h-20 min-w-[720px] items-end gap-px"
+        style="grid-template-columns: repeat(288, minmax(0, 1fr))"
+        role="group"
+        aria-label="Densidad de imágenes cada cinco minutos; también puedes usar la lista de grupos"
+      >
+        <button
+          :for={bin <- @bins}
+          id={"density-bin-#{bin.id}"}
+          phx-click="select_bin"
+          phx-value-id={bin.id}
+          aria-label={"#{bin_time(bin.id)} UTC: #{bin.count} imágenes"}
+          aria-pressed={to_string(selected_bin?(@selection, bin.id))}
+          title={"#{bin_time(bin.id)} · #{bin.count} imágenes"}
+          style={"height: #{max(4, div(bin.count * 100, @peak))}%"}
+          class={[
+            "min-h-1 rounded-t-sm transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-200",
+            if(bin.count == 0, do: "bg-slate-700", else: "bg-teal-300"),
+            selected_bin?(@selection, bin.id) && "ring-2 ring-white"
+          ]}
+        ></button>
+      </div>
+      <div class="mt-2 flex min-w-[720px] justify-between text-[10px] tabular-nums text-slate-500">
+        <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00 UTC</span>
+      </div>
+    </div>
+    <p class="mt-2 text-xs text-slate-500">
+      Las franjas grises indican periodos sin imágenes. Un grupo empieza tras más de 120 segundos sin actividad de esa cámara.
+    </p>
+    <div
+      id="visitor-groups"
+      phx-update="stream"
+      class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+    >
+      <p
+        id="visitor-groups-empty"
+        class="col-span-full hidden py-6 text-center text-sm text-slate-500 only:block"
+      >
+        No hay grupos en este día.
+      </p>
+      <div :for={{dom_id, group} <- @streams.groups} id={dom_id}>
+        <button
+          id={"visitor-group-#{group.id}"}
+          phx-click="select_group"
+          phx-value-id={group.id}
+          aria-pressed={to_string(selected_group?(@selection, group.id))}
+          class={[
+            "w-full rounded-xl border p-3 text-left transition hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-teal-200",
+            if(selected_group?(@selection, group.id),
+              do: "border-teal-300 bg-teal-300/10",
+              else: "border-white/10"
+            )
+          ]}
+        >
+          <span class="block text-sm font-medium text-teal-200">{group.camera_id} · {group.image_count} imágenes</span><span class="mt-1 block text-xs tabular-nums text-slate-400">{Calendar.strftime(
+            group.started_at,
+            "%H:%M:%S"
+          )}–{Calendar.strftime(group.ended_at, "%H:%M:%S")} UTC</span>
+        </button>
+      </div>
+    </div>
+    <nav
+      :if={@group_count > 24}
+      class="mt-4 flex items-center justify-center gap-3 text-sm"
+      aria-label="Páginas de grupos"
+    >
+      <button
+        id="visitor-groups-previous"
+        phx-click="group_page"
+        phx-value-direction="previous"
+        disabled={@group_page == 1}
+        class="rounded-lg px-3 py-2 hover:bg-white/5 disabled:opacity-30"
+      >Anteriores</button>
+      <span>Grupos · página {@group_page}</span>
+      <button
+        id="visitor-groups-next"
+        phx-click="group_page"
+        phx-value-direction="next"
+        disabled={@group_page * 24 >= @group_count}
+        class="rounded-lg px-3 py-2 hover:bg-white/5 disabled:opacity-30"
+      >Siguientes</button>
+    </nav>
+  </section>
   <div id="passage-events" phx-update="stream" class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
     <p
+      :if={!@loading? and !@query_error?}
       id="passage-empty"
       class="col-span-full hidden rounded-2xl border border-dashed border-slate-700 p-12 text-center text-slate-500 only:block"
     >
@@ -90,7 +248,7 @@
       id={id}
       class="overflow-hidden rounded-2xl border border-white/10 bg-slate-900 transition hover:border-teal-300/30"
     >
-      <.link patch={~p"/visitors/events/#{event.id}"} id={"passage-link-#{event.id}"}>
+      <.link patch={detail_path(@url_params, event.id)} id={"passage-link-#{event.id}"}>
         <img
           src={"/visitors/events/#{event.id}/snapshot"}
           loading="lazy"
@@ -103,6 +261,7 @@
           </p><p class="mt-2 text-sm">{event.crossed_at}</p><p class="mt-1 text-xs text-slate-500">
             Confianza {round(event.confidence * 100)}%
           </p>
+          <.snapshot_provenance event={event} />
         </div>
       </.link>
     </article>

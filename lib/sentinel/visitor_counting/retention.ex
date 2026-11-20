@@ -49,6 +49,10 @@ defmodule Sentinel.VisitorCounting.Retention do
           Enum.map(events, & &1.snapshot_key)
         end)
 
+      if keys != [] do
+        Phoenix.PubSub.broadcast(Sentinel.PubSub, "visitor_events", :passages_pruned)
+      end
+
       errors =
         Enum.flat_map(keys, fn key ->
           case Snapshots.delete(key) do
