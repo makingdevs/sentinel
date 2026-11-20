@@ -1,6 +1,13 @@
 defmodule Sentinel.MonitoringLogFilterTest do
   use ExUnit.Case, async: true
 
+  test "redacts improper crash-report lists without removing the privacy filter" do
+    event = %{msg: {:report, ["rtsp://user:secret@host/private" | :truncated]}}
+    result = Sentinel.Monitoring.LogFilter.filter(event, [])
+    refute inspect(result) =~ "secret"
+    assert inspect(result) =~ "REDACTED"
+  end
+
   test "redacts structs in native pipeline crash reports without disabling the logger filter" do
     event = %{
       msg: {:report, %{exception: %RuntimeError{message: "rtsp://user:secret@host/private"}}}

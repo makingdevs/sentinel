@@ -8,10 +8,10 @@ defmodule Sentinel.Monitoring.LogFilter do
   end
 
   defp redact(value) when is_list(value) do
-    if List.ascii_printable?(value) do
+    if printable_ascii?(value) do
       value |> List.to_string() |> redact() |> String.to_charlist()
     else
-      Enum.map(value, &redact/1)
+      redact_list(value)
     end
   end
 
@@ -25,4 +25,13 @@ defmodule Sentinel.Monitoring.LogFilter do
 
   defp redact(value) when is_map(value), do: value |> Map.to_list() |> Map.new(&redact/1)
   defp redact(value), do: value
+  defp printable_ascii?([]), do: true
+
+  defp printable_ascii?([head | tail]) when head in 32..126 or head in [9, 10, 13],
+    do: printable_ascii?(tail)
+
+  defp printable_ascii?(_), do: false
+
+  defp redact_list([]), do: []
+  defp redact_list([head | tail]), do: [redact(head) | redact(tail)]
 end
