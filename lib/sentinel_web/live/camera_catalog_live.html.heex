@@ -56,6 +56,7 @@
     <section class="space-y-3" aria-label="Canales registrados">
       <article
         :for={entry <- @cameras}
+        id={"catalog-camera-#{entry.camera.id}"}
         class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900 p-4"
       >
         <div class="flex items-center gap-3">
@@ -66,10 +67,11 @@
           ></span>
           <div>
             <p class="font-medium">{entry.camera.label} · {entry.camera.id}</p>
-            <p class="text-xs text-slate-500">
-              {counting_text(entry)} · Última captura {if entry.last_capture,
+            <p class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span class={counting_badge_class(entry)}>{counting_text(entry)}</span>
+              <span>Última captura {if entry.last_capture,
                 do: Sentinel.LocalTime.format(entry.last_capture) <> " CST",
-                else: "Sin captura persistida"}
+                else: "Sin captura persistida"}</span>
             </p>
             <p class="text-sm text-slate-400">
               {entry.camera.branch} · Principal {if "principal" in entry.sources,

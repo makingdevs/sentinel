@@ -20,11 +20,12 @@ defmodule SentinelWeb.CountingStatusComponent do
     <div id={@id}>
       <p
         id={"counting-status-#{@camera_id}"}
-        class="mb-2 text-xs text-slate-400"
+        class="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400"
         aria-live="polite"
       >
-        Conteo continuo: <span class="text-teal-300">{counting_status_text(@status)}</span>
-        · Cola {@stats.queued}/{@stats.capacity}
+        <span>Conteo continuo</span>
+        <span class={status_badge_class(@status)}>{counting_status_text(@status)}</span>
+        <span>Cola {@stats.queued}/{@stats.capacity}</span>
       </p>
       <p
         :if={@stats.dropped > 0 or @stats.failures > 0}
@@ -43,4 +44,33 @@ defmodule SentinelWeb.CountingStatusComponent do
   defp counting_status_text(:saturated), do: "Saturado"
   defp counting_status_text(:capacity), do: "Sin capacidad"
   defp counting_status_text(:error), do: "Sin conexión · reintentando"
+  defp counting_status_text(_status), do: "Estado desconocido"
+
+  defp status_badge_class(:active),
+    do:
+      "rounded-full bg-emerald-400/15 px-2.5 py-1 font-medium text-emerald-300 ring-1 ring-inset ring-emerald-400/30"
+
+  defp status_badge_class(:disabled),
+    do:
+      "rounded-full bg-slate-400/10 px-2.5 py-1 font-medium text-slate-300 ring-1 ring-inset ring-slate-400/20"
+
+  defp status_badge_class(:loading),
+    do:
+      "rounded-full bg-sky-400/15 px-2.5 py-1 font-medium text-sky-300 ring-1 ring-inset ring-sky-400/30"
+
+  defp status_badge_class(:saturated),
+    do:
+      "rounded-full bg-amber-400/15 px-2.5 py-1 font-medium text-amber-300 ring-1 ring-inset ring-amber-400/30"
+
+  defp status_badge_class(:capacity),
+    do:
+      "rounded-full bg-orange-400/15 px-2.5 py-1 font-medium text-orange-300 ring-1 ring-inset ring-orange-400/30"
+
+  defp status_badge_class(:error),
+    do:
+      "rounded-full bg-rose-400/15 px-2.5 py-1 font-medium text-rose-300 ring-1 ring-inset ring-rose-400/30"
+
+  defp status_badge_class(_status),
+    do:
+      "rounded-full bg-slate-400/10 px-2.5 py-1 font-medium text-slate-300 ring-1 ring-inset ring-slate-400/20"
 end

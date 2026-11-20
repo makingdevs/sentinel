@@ -44,6 +44,7 @@ defmodule SentinelWeb.CountingCalibrationTest do
     view |> element("#close-counting-division-1") |> render_click()
     refute has_element?(view, "#calibration-division-1-secundaria-0")
     assert has_element?(view, "#counting-status-division-1")
+    assert has_element?(view, "#counting-status-division-1 .rounded-full", "Deshabilitado")
   end
 
   test "two open calibrations have separate controls and save independently", %{conn: conn} do

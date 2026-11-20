@@ -109,4 +109,32 @@ defmodule SentinelWeb.CameraCatalogLive do
   def counting_text(%{counting_status: :active}), do: "Contando"
   def counting_text(%{counting_status: :saturated}), do: "Saturado"
   def counting_text(_camera), do: "Deshabilitado"
+
+  def counting_badge_class(%{counting_enabled: false}),
+    do:
+      "rounded-full bg-slate-400/10 px-2.5 py-1 font-medium text-slate-300 ring-1 ring-inset ring-slate-400/20"
+
+  def counting_badge_class(%{counting_status: :active}),
+    do:
+      "rounded-full bg-emerald-400/15 px-2.5 py-1 font-medium text-emerald-300 ring-1 ring-inset ring-emerald-400/30"
+
+  def counting_badge_class(%{counting_status: :loading}),
+    do:
+      "rounded-full bg-sky-400/15 px-2.5 py-1 font-medium text-sky-300 ring-1 ring-inset ring-sky-400/30"
+
+  def counting_badge_class(%{counting_status: :capacity}),
+    do:
+      "rounded-full bg-orange-400/15 px-2.5 py-1 font-medium text-orange-300 ring-1 ring-inset ring-orange-400/30"
+
+  def counting_badge_class(%{counting_status: :saturated}),
+    do:
+      "rounded-full bg-amber-400/15 px-2.5 py-1 font-medium text-amber-300 ring-1 ring-inset ring-amber-400/30"
+
+  def counting_badge_class(%{counting_status: :error}),
+    do:
+      "rounded-full bg-rose-400/15 px-2.5 py-1 font-medium text-rose-300 ring-1 ring-inset ring-rose-400/30"
+
+  def counting_badge_class(_camera),
+    do:
+      "rounded-full bg-slate-400/10 px-2.5 py-1 font-medium text-slate-300 ring-1 ring-inset ring-slate-400/20"
 end

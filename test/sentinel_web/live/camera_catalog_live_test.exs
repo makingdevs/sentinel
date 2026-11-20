@@ -86,6 +86,7 @@ defmodule SentinelWeb.CameraCatalogLiveTest do
     assert {:ok, _event, :inserted} = Sentinel.VisitorCounting.create_event(attrs)
     {:ok, view, _html} = live(conn, ~p"/cameras/catalog")
     assert has_element?(view, "#camera-catalog-form")
+    assert has_element?(view, "#catalog-camera-division-1 .rounded-full", "Deshabilitado")
     assert render(view) =~ "06:00:05"
   end
 end
