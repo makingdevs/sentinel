@@ -102,6 +102,32 @@ defmodule Sentinel.VisitorCounting.ManagerTest do
     refute_received {:media_started, _, _}
   end
 
+  test "a previous primary registration does not block a new secondary session" do
+    config = Application.fetch_env!(:sentinel, :visitor_counting)
+
+    Application.put_env(
+      :sentinel,
+      :visitor_counting,
+      Keyword.merge(config,
+        primary_snapshots: true,
+        snapshot_pipeline_module: Sentinel.TestMediaPipeline
+      )
+    )
+
+    camera_source_fixture("division-1", "principal", "rtsp://example.test/primary")
+    registry = Sentinel.VisitorCounting.SnapshotRegistry
+    {:ok, _} = Registry.register(registry, "division-1", :previous_source)
+
+    {:ok, rule} = VisitorCounting.configure_rule("division-1", %{enabled: true})
+    start_supervised!({Manager, []})
+    assert_receive {:media_started, secondary, %{rule: %{camera_id: "division-1"}}}
+    [{counter, _}] = Registry.lookup(Sentinel.VisitorCounting.Registry, rule.camera_id)
+    _ = :sys.get_state(counter)
+    Registry.unregister(registry, "division-1")
+    assert_receive {:media_started, _, %{generation: _}}, 3_000
+    assert :sys.get_state(counter).pipeline == secondary
+  end
+
   test "opening HLS viewers cannot duplicate the canonical counter" do
     VisitorCounting.configure_rule("division-1", %{enabled: true})
     manager = start_supervised!({Manager, []})

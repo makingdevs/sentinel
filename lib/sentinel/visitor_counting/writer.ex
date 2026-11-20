@@ -14,10 +14,12 @@ defmodule Sentinel.VisitorCounting.Writer do
 
     slot =
       Enum.find(1..capacity, fn slot ->
-        :ets.insert_new(@table, {{:job, slot}, token, event, 0, :ready})
+        :ets.insert_new(@table, {{:job, slot}, token, event, 0, :selecting})
       end)
 
     if slot do
+      event = Sentinel.VisitorCounting.SnapshotSelector.freeze(event)
+      :ets.insert(@table, {{:job, slot}, token, event, 0, :ready})
       send(__MODULE__, :drain)
       :ok
     else
@@ -130,6 +132,8 @@ defmodule Sentinel.VisitorCounting.Writer do
 
     {:noreply, state}
   end
+
+  defp persist(%{jpeg: jpeg, attrs: attrs}), do: Persistence.save(attrs, jpeg)
 
   defp persist(event) do
     with {:ok, jpeg} <- Encoder.encode(event), do: Persistence.save(event.attrs, jpeg)

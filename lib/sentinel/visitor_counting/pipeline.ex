@@ -39,6 +39,12 @@ defmodule Sentinel.VisitorCounting.Pipeline do
       spec =
         get_child(:source)
         |> via_out(Pad.ref(:output, track.control_path))
+        |> via_in(:input, auto_demand_size: 1)
+        |> child(:ingress, %Sentinel.VisitorCounting.MediaMeter{
+          camera_id: state.rule.camera_id,
+          channel: :secondary
+        })
+        |> via_in(:input, auto_demand_size: 1)
         |> child(:parser, parser)
         |> child(:decoder, decoder)
         |> via_in(:input, auto_demand_size: 1)

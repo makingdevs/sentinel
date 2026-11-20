@@ -88,6 +88,11 @@ defmodule Sentinel.Detection.Filter do
       frame_id: id,
       pts: buffer.pts,
       captured_at: now,
+      snapshot_generation:
+        if(state.counting_rule,
+          do: Sentinel.VisitorCounting.SnapshotSource.generation(state.counting_rule.camera_id),
+          else: nil
+        ),
       generation: state.generation,
       crossed_at: DateTime.utc_now()
     }

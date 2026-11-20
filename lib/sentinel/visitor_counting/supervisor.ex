@@ -7,6 +7,8 @@ defmodule Sentinel.VisitorCounting.Supervisor do
   def init(_opts) do
     children = [
       {Registry, keys: :unique, name: Sentinel.VisitorCounting.Registry},
+      {Registry, keys: :unique, name: Sentinel.VisitorCounting.SnapshotRegistry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Sentinel.VisitorCounting.SnapshotSources},
       Sentinel.VisitorCounting.Writer,
       {DynamicSupervisor, strategy: :one_for_one, name: Sentinel.VisitorCounting.Cameras}
     ]

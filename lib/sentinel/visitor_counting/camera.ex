@@ -36,6 +36,12 @@ defmodule Sentinel.VisitorCounting.Camera do
       metrics: %{frames: 0, crossings: 0}
     }
 
+    if VisitorCounting.config(:primary_snapshots, false) and
+         (VisitorCounting.config(:primary_snapshot_cameras, :all) == :all or
+            state.rule.camera_id in VisitorCounting.config(:primary_snapshot_cameras, [])) do
+      send(self(), :start_snapshot_source)
+    end
+
     Process.send_after(self(), :watchdog, 5_000)
     {:ok, state, {:continue, :connect}}
   end
@@ -51,6 +57,19 @@ defmodule Sentinel.VisitorCounting.Camera do
   end
 
   @impl true
+  def handle_info(:start_snapshot_source, state) do
+    case DynamicSupervisor.start_child(
+           Sentinel.VisitorCounting.SnapshotSources,
+           {Sentinel.VisitorCounting.SnapshotSource,
+            owner: self(), camera_id: state.rule.camera_id}
+         ) do
+      {:ok, _pid} -> :ok
+      {:error, _reason} -> Process.send_after(self(), :start_snapshot_source, 1_000)
+    end
+
+    {:noreply, state}
+  end
+
   def handle_info({:connect, token}, %{timer: token} = state),
     do: {:noreply, connect(%{state | timer: nil})}
 
