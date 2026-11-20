@@ -1,5 +1,5 @@
 defmodule Sentinel.VisitorCounting.Timeline do
-  @moduledoc "Bounded UTC image activity queries. All grouping happens in PostgreSQL."
+  @moduledoc "Bounded Mexico City image activity queries. All grouping happens in PostgreSQL."
   alias Sentinel.Repo
 
   @page_size 24
@@ -30,10 +30,8 @@ defmodule Sentinel.VisitorCounting.Timeline do
   """
 
   def bounds(%Date{} = date) do
-    with {:ok, start_at} <- DateTime.new(date, ~T[00:00:00], "Etc/UTC"),
-         {:ok, end_at} <- DateTime.new(Date.add(date, 1), ~T[00:00:00], "Etc/UTC") do
-      {:ok, {start_at, end_at}}
-    end
+    {:ok,
+     {Sentinel.LocalTime.midnight_utc(date), Sentinel.LocalTime.midnight_utc(Date.add(date, 1))}}
   end
 
   def bounds(day) when is_binary(day) do

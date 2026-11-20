@@ -116,7 +116,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     conn: conn
   } do
     saved = event("entry", "division-1", 1)
-    day = Date.utc_today()
+    day = Sentinel.LocalTime.today()
     {:ok, view, _} = live(conn, "/visitors?mode=daily&day=#{day}&group=#{saved.id}")
     render_async(view)
     render_async(view)
@@ -143,7 +143,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     {:ok, view, _} =
       live(
         conn,
-        "/visitors?mode=daily&day=#{Date.utc_today()}&group=999999999999999999999999999999&page=bad"
+        "/visitors?mode=daily&day=#{Sentinel.LocalTime.today()}&group=999999999999999999999999999999&page=bad"
       )
 
     render_async(view)

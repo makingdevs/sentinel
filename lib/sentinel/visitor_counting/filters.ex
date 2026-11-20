@@ -1,5 +1,5 @@
 defmodule Sentinel.VisitorCounting.Filters do
-  @moduledoc "Validated UTC calendar-day history filters. End date is inclusive in the form."
+  @moduledoc "Validated Mexico City calendar-day history filters. End date is inclusive in the form."
   use Ecto.Schema
   import Ecto.Changeset
   @primary_key false
@@ -13,7 +13,9 @@ defmodule Sentinel.VisitorCounting.Filters do
   end
 
   def changeset(attrs) do
-    %__MODULE__{from: Date.utc_today(), until: Date.utc_today(), day: Date.utc_today()}
+    today = Sentinel.LocalTime.today()
+
+    %__MODULE__{from: today, until: today, day: today}
     |> cast(attrs, [:camera_id, :direction, :from, :until, :mode, :day], empty_values: [])
     |> validate_required([:from, :until, :day, :mode])
     |> validate_inclusion(:mode, ["daily", "range"])
@@ -37,8 +39,8 @@ defmodule Sentinel.VisitorCounting.Filters do
     %{
       "camera_id" => filters.camera_id,
       "direction" => filters.direction,
-      "from" => DateTime.new!(filters.from, ~T[00:00:00], "Etc/UTC"),
-      "until" => DateTime.new!(Date.add(filters.until, 1), ~T[00:00:00], "Etc/UTC")
+      "from" => Sentinel.LocalTime.midnight_utc(filters.from),
+      "until" => Sentinel.LocalTime.midnight_utc(Date.add(filters.until, 1))
     }
   end
 end

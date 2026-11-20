@@ -7,7 +7,7 @@ defmodule Sentinel.VisitorCounting.TimelineTest do
     attrs = %{
       camera_id: camera,
       rule_revision: 1,
-      crossed_at: DateTime.add(~U[2026-11-19 00:00:00.000000Z], seconds),
+      crossed_at: DateTime.add(~U[2026-11-19 06:00:00.000000Z], seconds),
       direction: "entry",
       tracking_session_id: "timeline",
       track_id: 1,
@@ -54,7 +54,7 @@ defmodule Sentinel.VisitorCounting.TimelineTest do
 
     event("received", -1, "c", %{
       snapshot_quality: "primary",
-      snapshot_received_at: ~U[2026-11-19 01:00:00.000000Z],
+      snapshot_received_at: ~U[2026-11-19 07:00:00.000000Z],
       snapshot_width: 1920,
       snapshot_height: 1080
     })
@@ -98,7 +98,7 @@ defmodule Sentinel.VisitorCounting.TimelineTest do
         WHERE COALESCE(snapshot_received_at, crossed_at) >= $1
           AND COALESCE(snapshot_received_at, crossed_at) < $2
         """,
-        [~N[2026-11-19 00:00:00], ~N[2026-11-20 00:00:00]]
+        [~N[2026-11-19 06:00:00], ~N[2026-11-20 06:00:00]]
       )
 
     assert inspect(plan.rows) =~ "effective_image_at"
@@ -107,8 +107,8 @@ defmodule Sentinel.VisitorCounting.TimelineTest do
              Repo.delete_all(
                from e in Sentinel.VisitorCounting.PassageEvent,
                  where:
-                   e.crossed_at >= ^~U[2026-11-19 00:00:00Z] and
-                     e.crossed_at < ^~U[2026-11-20 00:00:00Z]
+                   e.crossed_at >= ^~U[2026-11-19 06:00:00Z] and
+                     e.crossed_at < ^~U[2026-11-20 06:00:00Z]
              )
              |> then(fn {count, rows} -> {:ok, count, rows} end)
 

@@ -230,8 +230,8 @@ defmodule SentinelWeb.VisitorCountingLive do
     with {:ok, from, 0} <- parse_selection_time(params["selection_from"]),
          {:ok, until, 0} <- parse_selection_time(params["selection_until"]),
          true <- DateTime.compare(from, until) != :gt,
-         true <- DateTime.to_date(from) == DateTime.to_date(group.started_at),
-         true <- DateTime.to_date(until) == DateTime.to_date(group.started_at),
+         true <- Sentinel.LocalTime.date(from) == Sentinel.LocalTime.date(group.started_at),
+         true <- Sentinel.LocalTime.date(until) == Sentinel.LocalTime.date(group.started_at),
          true <- DateTime.compare(from, group.ended_at) != :gt,
          true <- DateTime.compare(until, group.started_at) != :lt do
       {from, until}
@@ -353,8 +353,10 @@ defmodule SentinelWeb.VisitorCountingLive do
       <p :if={@event.snapshot_fallback_reason}>
         Motivo: {fallback_label(@event.snapshot_fallback_reason)}
       </p>
-      <p :if={@detail}>Cruce: {@event.crossed_at} UTC</p>
-      <p :if={@event.snapshot_received_at}>Imagen recibida: {@event.snapshot_received_at} UTC</p>
+      <p :if={@detail}>Cruce: {Sentinel.LocalTime.format(@event.crossed_at)} CST</p>
+      <p :if={@event.snapshot_received_at}>
+        Imagen recibida: {Sentinel.LocalTime.format(@event.snapshot_received_at)} CST
+      </p>
       <p :if={!@event.snapshot_received_at}>Hora de recepción y dimensiones desconocidas.</p>
       <p :if={@detail and @event.snapshot_quality == "primary"}>
         Captura nativa sin recuadro de detección. La recepción aproxima el momento del cruce; no implica sincronización de exposición entre canales.

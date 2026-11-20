@@ -11,7 +11,7 @@
     >Ver cámaras</.link>
   </header>
   <p class="mb-6 max-w-3xl text-sm leading-6 text-slate-400">
-    Cada registro representa un cruce, no una persona única. Fechas y horas en UTC. Los totales incluyen solo los eventos guardados; revisa las pérdidas en la configuración de cada cámara.
+    Cada registro representa un cruce, no una persona única. Fechas y horas de Ciudad de México (CST). Los totales incluyen solo los eventos guardados; revisa las pérdidas en la configuración de cada cámara.
   </p>
   <section
     :if={@event}
@@ -62,7 +62,7 @@
       :if={@filters.mode == "daily"}
       field={@form[:day]}
       type="date"
-      label="Día (UTC)"
+      label="Día (CST)"
       class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
     />
     <.input
@@ -76,14 +76,14 @@
       :if={@filters.mode == "range"}
       field={@form[:from]}
       type="date"
-      label="Desde (UTC)"
+      label="Desde (CST)"
       class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
     />
     <.input
       :if={@filters.mode == "range"}
       field={@form[:until]}
       type="date"
-      label="Hasta (UTC)"
+      label="Hasta (CST)"
       class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
     />
     <.input
@@ -135,12 +135,12 @@
     :if={@filters.mode == "daily"}
     id="daily-timeline"
     class="mb-8 rounded-2xl border border-white/10 bg-slate-900 p-4 sm:p-6"
-    aria-label="Actividad de imágenes del día UTC"
+    aria-label="Actividad de imágenes del día CST"
   >
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="font-semibold">Actividad del {@filters.day}</h2><p class="mt-1 text-xs text-slate-400">
-          {@image_count} imágenes · {@group_count} grupos · intervalos de 5 minutos · UTC
+          {@image_count} imágenes · {@group_count} grupos · intervalos de 5 minutos · CST
         </p>
       </div>
       <button
@@ -163,7 +163,7 @@
           id={"density-bin-#{bin.id}"}
           phx-click="select_bin"
           phx-value-id={bin.id}
-          aria-label={"#{bin_time(bin.id)} UTC: #{bin.count} imágenes"}
+          aria-label={"#{bin_time(bin.id)} CST: #{bin.count} imágenes"}
           aria-pressed={to_string(selected_bin?(@selection, bin.id))}
           title={"#{bin_time(bin.id)} · #{bin.count} imágenes"}
           style={"height: #{max(4, div(bin.count * 100, @peak))}%"}
@@ -175,7 +175,7 @@
         ></button>
       </div>
       <div class="mt-2 flex min-w-[720px] justify-between text-[10px] tabular-nums text-slate-500">
-        <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00 UTC</span>
+        <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00 CST</span>
       </div>
     </div>
     <p class="mt-2 text-xs text-slate-500">
@@ -206,10 +206,10 @@
             )
           ]}
         >
-          <span class="block text-sm font-medium text-teal-200">{group.camera_id} · {group.image_count} imágenes</span><span class="mt-1 block text-xs tabular-nums text-slate-400">{Calendar.strftime(
+          <span class="block text-sm font-medium text-teal-200">{group.camera_id} · {group.image_count} imágenes</span><span class="mt-1 block text-xs tabular-nums text-slate-400">{Sentinel.LocalTime.format(
             group.started_at,
             "%H:%M:%S"
-          )}–{Calendar.strftime(group.ended_at, "%H:%M:%S")} UTC</span>
+          )}–{Sentinel.LocalTime.format(group.ended_at, "%H:%M:%S")} CST</span>
         </button>
       </div>
     </div>
@@ -258,7 +258,7 @@
         <div class="p-4">
           <p class="text-xs font-medium text-teal-300">
             {event.camera_id} · {if event.direction == "entry", do: "Entrada", else: "Salida"}
-          </p><p class="mt-2 text-sm">{event.crossed_at}</p><p class="mt-1 text-xs text-slate-500">
+          </p><p class="mt-2 text-sm">{Sentinel.LocalTime.format(event.crossed_at)} CST</p><p class="mt-1 text-xs text-slate-500">
             Confianza {round(event.confidence * 100)}%
           </p>
           <.snapshot_provenance event={event} />

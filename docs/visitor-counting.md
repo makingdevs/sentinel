@@ -16,7 +16,7 @@ Python/Elixir existente. No guarda video ni requiere abrir `/cameras`.
 4. La línea va de verde a amarillo. Si es horizontal de izquierda a derecha,
    positivo significa hacia abajo. Selecciona dirección de entrada, motor y confianza
    (0.35–1). Habilita y guarda. Verifica entradas/salidas reales antes de usar los datos.
-5. Consulta `/visitors`: filtros de cámara/días UTC/dirección, páginas de 24 eventos,
+5. Consulta `/visitors`: filtros de cámara/días de Ciudad de México/dirección, páginas de 24 eventos,
    totales del periodo y detalle con JPEG. El día final es inclusivo.
 
 En IEx también puedes configurar una cámara del catálogo:
@@ -138,8 +138,8 @@ de autos y fotos no prueban esos criterios. No afirmar precisión general.
 
 ## Actividad diaria y procedencia
 
-En `/visitors`, **Actividad diaria** muestra un día UTC en 288 intervalos de
-cinco minutos. Cada cámara inicia un nuevo grupo después de más de 120 segundos
+En `/visitors`, **Actividad diaria** muestra un día de Ciudad de México (CST, UTC−06:00) en 288 intervalos de
+cinco minutos. Las fechas de los filtros y las horas visibles usan CST. La base de datos conserva los instantes en UTC. Cada cámara inicia un nuevo grupo después de más de 120 segundos
 sin imágenes en los filtros seleccionados. La agrupación conserva una imagen
 por cruce guardado. Las capturas nuevas se agrupan por hora de recepción de
 la imagen y las históricas por hora del cruce. El modo **Rango de fechas**
