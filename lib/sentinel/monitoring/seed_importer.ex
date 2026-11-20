@@ -4,11 +4,18 @@ defmodule Sentinel.Monitoring.SeedImporter do
   alias Sentinel.Repo
 
   @qualities ~w(principal secundaria)
+  @colors Camera.colors()
 
   def catalog do
     for {prefix, branch} <- [{"division", "División"}, {"lavirgen", "La Virgen"}], n <- 1..4 do
-      %{id: "#{prefix}-#{n}", branch: branch, label: "Cámara #{n}"}
+      id = "#{prefix}-#{n}"
+      %{id: id, branch: branch, label: "Cámara #{n}", color: color_for(id)}
     end
+  end
+
+  defp color_for(id) do
+    index = :erlang.phash2(id, length(@colors))
+    Enum.at(@colors, index)
   end
 
   def import_file(path) do

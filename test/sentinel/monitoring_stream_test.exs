@@ -109,4 +109,48 @@ defmodule Sentinel.MonitoringStreamTest do
     assert new_options.generation != options.generation
     assert {:error, :stream_unavailable} = CameraStream.file(options.owner, "index.m3u8")
   end
+
+  test "replacing one source stops only that camera and quality reader" do
+    camera_source_fixture("division-1", "principal", "rtsp://example.test/main")
+    camera_source_fixture("division-2", "secundaria", "rtsp://example.test/other")
+
+    keys = [
+      {"division-1", "principal"},
+      {"division-1", "secundaria"},
+      {"division-2", "secundaria"}
+    ]
+
+    pids =
+      Map.new(keys, fn key ->
+        {:ok, pid} =
+          DynamicSupervisor.start_child(
+            Sentinel.Monitoring.Supervisor,
+            {CameraStream,
+             key: key,
+             source_url: "rtsp://example.test/original",
+             pipeline_module: Sentinel.TestMediaPipeline}
+          )
+
+        {key, pid}
+      end)
+
+    refs = Map.new(pids, fn {key, pid} -> {key, Process.monitor(pid)} end)
+
+    assert {:ok, _camera} =
+             Monitoring.save_camera(%{id: "division-1", branch: "División", label: "Cámara 1"}, %{
+               "principal" => "rtsp://example.test/replaced"
+             })
+
+    assert_receive {:DOWN, principal_ref, :process, principal_pid, _}
+    assert principal_ref == refs[{"division-1", "principal"}]
+    assert principal_pid == pids[{"division-1", "principal"}]
+    secondary_pid = pids[{"division-1", "secundaria"}]
+    other_camera_pid = pids[{"division-2", "secundaria"}]
+    refute_receive {:DOWN, _, :process, ^secondary_pid, _}, 50
+    refute_receive {:DOWN, _, :process, ^other_camera_pid, _}, 50
+
+    for key <- [{"division-1", "secundaria"}, {"division-2", "secundaria"}] do
+      DynamicSupervisor.terminate_child(Sentinel.Monitoring.Supervisor, pids[key])
+    end
+  end
 end

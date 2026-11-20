@@ -27,6 +27,7 @@ defmodule Sentinel.VisitorCounting.Manager do
         do: DynamicSupervisor.terminate_child(Sentinel.VisitorCounting.Cameras, pid)
 
     Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_rules")
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
     send(self(), :sync)
 
     {:ok,
@@ -57,6 +58,7 @@ defmodule Sentinel.VisitorCounting.Manager do
   end
 
   def handle_info({:rule_changed, _id}, state), do: {:noreply, reconcile(state)}
+  def handle_info({:camera_changed, _id}, state), do: {:noreply, reconcile(state)}
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
     children = Map.reject(state.children, fn {_id, child} -> child.pid == pid end)

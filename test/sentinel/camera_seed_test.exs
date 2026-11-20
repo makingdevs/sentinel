@@ -28,6 +28,7 @@ defmodule Sentinel.CameraSeedTest do
     File.write!(path, Jason.encode!(sources))
     assert {:ok, %{cameras: 8, sources: 16}} = SeedImporter.import_file(path)
     original = Repo.get!(Camera, "division-1")
+    Repo.update!(Ecto.Changeset.change(original, color: "rose", archived_at: DateTime.utc_now()))
     connection = Repo.get_by!(CameraSource, camera_id: original.id, quality: "principal")
     Repo.update!(Ecto.Changeset.change(original, label: "Edited"))
     changed = put_in(sources, ["division-1", "principal"], "rtsp://example.test/changed")
@@ -38,17 +39,18 @@ defmodule Sentinel.CameraSeedTest do
     assert Repo.get!(Camera, "extra").label == "Unrelated"
     assert Repo.get!(Camera, original.id).inserted_at == original.inserted_at
     assert Repo.get!(Camera, original.id).label == "Cámara 1"
+    assert Repo.get!(Camera, original.id).color == "rose"
+    assert Repo.get!(Camera, original.id).archived_at
     next = Repo.get!(CameraSource, connection.id)
     assert next.inserted_at == connection.inserted_at
     assert next.url == "rtsp://example.test/changed"
-    assert {:ok, "rtsp://example.test/changed"} = Monitoring.source_url(original.id, "principal")
+    assert {:error, :unknown_camera} = Monitoring.source_url(original.id, "principal")
 
-    assert {:ok, "rtsp://user:secret@example.test/sub"} =
-             Monitoring.source_url(original.id, "secundaria")
+    assert {:error, :unknown_camera} = Monitoring.source_url(original.id, "secundaria")
 
     assert Enum.all?(
              Monitoring.list_cameras(),
-             &(Map.keys(&1) |> Enum.sort() == [:branch, :id, :label])
+             &(Map.keys(&1) |> Enum.sort() == [:branch, :color, :id, :label])
            )
   end
 
