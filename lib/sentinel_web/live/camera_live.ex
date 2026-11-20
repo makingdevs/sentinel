@@ -10,7 +10,10 @@ defmodule SentinelWeb.CameraLive do
   def mount(_params, _session, socket) do
     if connected?(socket) and SentinelWeb.VisitorAccess.socket_allowed?(socket) do
       Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_status")
+      Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
       Process.send_after(self(), :counting_status, 2_000)
+    else
+      if connected?(socket), do: Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
     end
 
     {:ok,
@@ -196,6 +199,25 @@ defmodule SentinelWeb.CameraLive do
     if socket.assigns.visitor_access? and Map.has_key?(socket.assigns.selected, id) do
       refresh_counting(id)
     end
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:camera_changed, _id}, socket) do
+    options = Monitoring.camera_options()
+
+    selected =
+      Map.new(socket.assigns.selected, fn {id, card} ->
+        case Monitoring.fetch_camera(id) do
+          {:ok, metadata} -> {id, Map.merge(card, metadata)}
+          _ -> {id, card}
+        end
+      end)
+
+    socket = assign(socket, camera_options: options, selected: selected)
+
+    socket =
+      Enum.reduce(selected, socket, fn {_id, card}, acc -> stream_insert(acc, :cameras, card) end)
 
     {:noreply, socket}
   end

@@ -22,6 +22,12 @@
       href={~p"/visitors"}
       class="rounded-lg px-4 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
     >Historial de cruces</.link>
+    <.link
+      :if={@visitor_access?}
+      id="camera-catalog"
+      navigate={~p"/cameras/catalog"}
+      class="rounded-lg px-4 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
+    >Administrar canales</.link>
   </header>
 
   <section aria-labelledby="camera-heading">
@@ -108,7 +114,13 @@
         <div class="flex items-center justify-between gap-3 px-4 py-4">
           <div>
             <p class="text-xs text-teal-300">{camera.branch}</p>
-            <h2 class="mt-0.5 text-sm font-semibold">{camera.label}</h2>
+            <h2 class="mt-0.5 flex items-center gap-2 text-sm font-semibold">
+              <span
+                class="size-2.5 rounded-full"
+                style={"background-color: #{Sentinel.Monitoring.Camera.color_value(camera.color)}"}
+                aria-hidden="true"
+              ></span>{camera.label}
+            </h2>
           </div>
           <button
             id={"remove-#{camera.id}"}

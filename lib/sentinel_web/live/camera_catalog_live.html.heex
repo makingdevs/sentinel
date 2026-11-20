@@ -1,0 +1,107 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <main class="mx-auto max-w-5xl px-5 py-10">
+    <header class="mb-8 flex items-center justify-between">
+      <div>
+        <p class="text-sm text-teal-300">Sentinel · Configuración local</p>
+        <h1 class="mt-2 text-3xl font-semibold">Catálogo de canales</h1>
+      </div>
+      <.link navigate={~p"/cameras"} class="text-sm text-teal-200">Volver a cámaras</.link>
+    </header>
+
+    <.form
+      for={@form}
+      id="camera-catalog-form"
+      phx-change="validate"
+      phx-submit="save"
+      class="mb-10 grid gap-4 rounded-2xl border border-white/10 bg-slate-900 p-6 sm:grid-cols-2"
+    >
+      <h2 class="sm:col-span-2 text-lg font-semibold">
+        {if @editing_id, do: "Editar canal", else: "Nuevo canal"}
+      </h2>
+      <.input field={@form[:id]} label="ID estable" readonly={!!@editing_id} />
+      <.input field={@form[:branch]} label="Sucursal" />
+      <.input field={@form[:label]} label="Etiqueta" />
+      <.input
+        field={@form[:color]}
+        type="select"
+        label="Color"
+        options={Enum.map(@colors, &{String.capitalize(&1), &1})}
+      />
+      <.input
+        field={@form[:principal]}
+        type="password"
+        autocomplete="new-password"
+        label="RTSP principal (vacío conserva el valor)"
+      />
+      <.input
+        field={@form[:secundaria]}
+        type="password"
+        autocomplete="new-password"
+        label="RTSP secundaria (vacío conserva el valor)"
+      />
+      <div class="sm:col-span-2 flex gap-3">
+        <button
+          id="save-camera"
+          class="rounded-lg bg-teal-300 px-4 py-2 font-medium text-slate-950"
+        >Guardar canal</button>
+        <button
+          :if={@editing_id}
+          type="button"
+          phx-click="new"
+          class="rounded-lg border border-white/10 px-4 py-2"
+        >Cancelar</button>
+      </div>
+    </.form>
+
+    <section class="space-y-3" aria-label="Canales registrados">
+      <article
+        :for={entry <- @cameras}
+        class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900 p-4"
+      >
+        <div class="flex items-center gap-3">
+          <span
+            class="size-3 rounded-full"
+            style={"background-color: #{Camera.color_value(entry.camera.color)}"}
+            aria-hidden="true"
+          ></span>
+          <div>
+            <p class="font-medium">{entry.camera.label} · {entry.camera.id}</p>
+            <p class="text-xs text-slate-500">
+              {counting_text(entry)} · Última captura {if entry.last_capture,
+                do: Sentinel.LocalTime.format(entry.last_capture) <> " CST",
+                else: "Sin captura persistida"}
+            </p>
+            <p class="text-sm text-slate-400">
+              {entry.camera.branch} · Principal {if "principal" in entry.sources,
+                do: "configurada",
+                else: "ausente"} · Secundaria {if "secundaria" in entry.sources,
+                do: "configurada",
+                else: "ausente"}
+            </p>
+          </div>
+          <span :if={entry.camera.archived_at} class="text-xs text-amber-300">Archivada</span>
+        </div>
+        <div class="flex gap-2">
+          <button
+            :if={!entry.camera.archived_at}
+            phx-click="edit"
+            phx-value-id={entry.camera.id}
+            class="rounded-lg border border-white/10 px-3 py-2 text-sm"
+          >Editar</button>
+          <button
+            :if={!entry.camera.archived_at}
+            phx-click="archive"
+            phx-value-id={entry.camera.id}
+            class="rounded-lg border border-white/10 px-3 py-2 text-sm"
+          >Archivar</button>
+          <button
+            :if={entry.camera.archived_at}
+            phx-click="restore"
+            phx-value-id={entry.camera.id}
+            class="rounded-lg border border-white/10 px-3 py-2 text-sm"
+          >Restaurar</button>
+        </div>
+      </article>
+    </section>
+  </main>
+</Layouts.app>

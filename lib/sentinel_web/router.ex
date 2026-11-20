@@ -24,6 +24,7 @@ defmodule SentinelWeb.Router do
     get "/visitors/events/:event_id/snapshot", VisitorSnapshotController, :show
 
     live_session :visitor_local, on_mount: [{SentinelWeb.VisitorAccess, :local}] do
+      live "/cameras/catalog", CameraCatalogLive, :index
       live "/visitors", VisitorCountingLive, :index
       live "/visitors/events/:event_id", VisitorCountingLive, :show
     end

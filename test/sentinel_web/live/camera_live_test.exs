@@ -6,6 +6,8 @@ defmodule SentinelWeb.CameraLiveTest do
   defp camera_catalog_fixture_setup(_context), do: camera_catalog_fixture()
 
   import Phoenix.LiveViewTest
+  alias Sentinel.Repo
+  alias Sentinel.Monitoring.Camera
 
   test "starts empty with grouped choices and resets on a fresh visit", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/cameras")
@@ -27,6 +29,17 @@ defmodule SentinelWeb.CameraLiveTest do
     add(view, "division-1")
     {:ok, fresh, _html} = live(conn, ~p"/cameras")
     refute has_element?(fresh, "#camera-grid video")
+  end
+
+  test "open camera cards refresh catalog color without replacing the player", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/cameras")
+    add(view, "division-1")
+    assert has_element?(view, "#player-division-1-secundaria-0")
+    camera = Repo.get!(Camera, "division-1")
+    Repo.update!(Ecto.Changeset.change(camera, color: "rose"))
+    Phoenix.PubSub.broadcast(Sentinel.PubSub, "camera_catalog", {:camera_changed, camera.id})
+    assert has_element?(view, "#cameras-division-1 [style='background-color: #fb7185']")
+    assert has_element?(view, "#player-division-1-secundaria-0")
   end
 
   test "adds from both branches without duplicates and preserves other player identities", %{
