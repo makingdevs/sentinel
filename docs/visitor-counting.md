@@ -135,3 +135,47 @@ del usuario. El navegador integrado no está disponible en esta sesión: falta Q
 visual de calibración. Falta un video de cruces anotado y representativo para
 comparar ambos backends, FPS/latencia y precisión por cámara; los fixtures existentes
 de autos y fotos no prueban esos criterios. No afirmar precisión general.
+
+## Actividad diaria y procedencia
+
+En `/visitors`, **Actividad diaria** muestra un día UTC en 288 intervalos de
+cinco minutos. Cada cámara inicia un nuevo grupo después de más de 120 segundos
+sin imágenes en los filtros seleccionados. La agrupación conserva una imagen
+por cruce guardado. Las capturas nuevas se agrupan por hora de recepción de
+la imagen y las históricas por hora del cruce. El modo **Rango de fechas**
+sigue disponible.
+
+La detección y el seguimiento usan el canal secundario. Si se habilita la
+captura primaria, el contador guarda un JPEG del cuadro completo a resolución
+nativa. Selecciona la recepción primaria más reciente hasta 750 ms antes
+del cuadro secundario que originó el cruce. El detalle muestra ambas horas.
+Para una primaria ausente, vencida o fuera de límites, guarda el cuadro
+secundario exacto con su recuadro y el motivo del respaldo. Las imágenes
+históricas conservan su resolución y procedencia original.
+
+La primaria abre una sesión RTSP adicional por contador y decodifica el flujo
+completo. Muestrea hasta 2 JPEG/s por cámara, con 3 s de vigencia, hasta 6 JPEG
+y 12 MiB de caché, 2 MiB por JPEG y resolución de hasta 3840 × 2160. Los JPEG
+pueden ocupar más espacio en disco. Para presupuestarlo, multiplica cruces
+guardados por día por tamaño medio de JPEG y días de retención. La retención
+sigue usando la hora del cruce.
+
+1. Ejecuta las migraciones primero. Las columnas son opcionales y los índices
+   se crean de forma concurrente. Ejecuta un único migrador.
+2. Despliega con la captura primaria desactivada. Para activar una cámara,
+   configura `:sentinel, :visitor_counting` con `primary_snapshots: true`
+   y `primary_snapshot_cameras: ["id-de-cámara"]`, conservando las demás
+   opciones, y reinicia la aplicación.
+3. Comprueba el uso de CPU, RSS, ancho de banda y disco, y revisa los motivos
+   de respaldo antes de ampliar la lista. Mantén las direcciones RTSP en
+   PostgreSQL y fuera de los comandos y reportes.
+4. Para volver a la captura secundaria, desactiva `primary_snapshots` y
+   reinicia la aplicación. Conserva las columnas si quieres mantener la
+   procedencia de capturas ya registradas. Un rollback de esquema requiere
+   primero una versión de la app compatible y elimina esa procedencia.
+
+`bash scripts/visitors/smoke.sh` ejecuta las pruebas deterministas.
+`bash scripts/visitors/smoke.sh --real [id1 id2]` mide dos cámaras y fuerza
+una reconexión primaria sin cambiar reglas ni guardar cruces. El reporte local
+en `tmp/visitor-capture-smoke/result.json` incluye los bytes de video
+codificado, excluyendo la sobrecarga del transporte.
