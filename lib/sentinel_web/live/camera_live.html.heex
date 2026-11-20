@@ -115,11 +115,7 @@
           <div>
             <p class="text-xs text-teal-300">{camera.branch}</p>
             <h2 class="mt-0.5 flex items-center gap-2 text-sm font-semibold">
-              <span
-                class="size-2.5 rounded-full"
-                style={"background-color: #{Sentinel.Monitoring.Camera.color_value(camera.color)}"}
-                aria-hidden="true"
-              ></span>{camera.label}
+              <.channel_label color={camera.color}>{camera.label}</.channel_label>
             </h2>
           </div>
           <button

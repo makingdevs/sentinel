@@ -37,15 +37,15 @@ defmodule SentinelWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header :if={!@wide} class="navbar px-4 sm:px-6 lg:px-8">
+    <header :if={!@wide} class="navbar flex-wrap gap-y-2 px-4 sm:px-6 lg:px-8">
       <div class="flex-1">
         <a href="/" class="flex-1 flex w-fit items-center gap-2">
           <img src={~p"/images/logo.svg"} width="36" />
           <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
         </a>
       </div>
-      <div class="flex-none">
-        <ul class="flex px-1 space-x-4 items-center">
+      <div class="max-w-full flex-none">
+        <ul class="flex flex-wrap items-center gap-2 sm:gap-4">
           <li>
             <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
           </li>

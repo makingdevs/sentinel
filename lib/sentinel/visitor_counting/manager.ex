@@ -60,6 +60,12 @@ defmodule Sentinel.VisitorCounting.Manager do
   def handle_info({:rule_changed, _id}, state), do: {:noreply, reconcile(state)}
   def handle_info({:camera_changed, _id}, state), do: {:noreply, reconcile(state)}
 
+  def handle_info({:camera_sources_changed, id}, state) do
+    {child, children} = Map.pop(state.children, id)
+    if child, do: stop_child(child)
+    {:noreply, reconcile(%{state | children: children})}
+  end
+
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
     children = Map.reject(state.children, fn {_id, child} -> child.pid == pid end)
     {:noreply, reconcile(%{state | children: children})}
@@ -72,8 +78,7 @@ defmodule Sentinel.VisitorCounting.Manager do
     children =
       Enum.reduce(state.children, state.children, fn {id, child}, children ->
         if not Map.has_key?(wanted, id) or wanted[id].revision != child.revision do
-          Process.demonitor(child.ref, [:flush])
-          DynamicSupervisor.terminate_child(Sentinel.VisitorCounting.Cameras, child.pid)
+          stop_child(child)
           Map.delete(children, id)
         else
           children
@@ -117,6 +122,11 @@ defmodule Sentinel.VisitorCounting.Manager do
     %{state | children: children, capacity: capacity}
   rescue
     _ in [Postgrex.Error, DBConnection.ConnectionError] -> state
+  end
+
+  defp stop_child(child) do
+    Process.demonitor(child.ref, [:flush])
+    DynamicSupervisor.terminate_child(Sentinel.VisitorCounting.Cameras, child.pid)
   end
 
   @impl true

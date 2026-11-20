@@ -68,32 +68,46 @@ defmodule Sentinel.Monitoring do
             {:error, changeset} -> Repo.rollback(changeset)
           end
 
-        Enum.each(source_attrs, fn {quality, url} ->
-          if url not in [nil, ""] do
-            source =
-              Repo.get_by(CameraSource, camera_id: camera.id, quality: quality) ||
-                %CameraSource{camera_id: camera.id}
+        changed_qualities =
+          for {quality, url} <- source_attrs, url not in [nil, ""], reduce: [] do
+            changed ->
+              source =
+                Repo.get_by(CameraSource, camera_id: camera.id, quality: quality) ||
+                  %CameraSource{camera_id: camera.id}
 
-            case Repo.insert_or_update(
-                   CameraSource.changeset(source, %{quality: quality, url: url}),
-                   log: false
-                 ) do
-              {:ok, _source} -> :ok
-              {:error, changeset} -> Repo.rollback(changeset)
-            end
+              source_changeset = CameraSource.changeset(source, %{quality: quality, url: url})
+
+              case Repo.insert_or_update(source_changeset, log: false) do
+                {:ok, _source} ->
+                  if Ecto.Changeset.changed?(source_changeset, :url),
+                    do: [quality | changed],
+                    else: changed
+
+                {:error, changeset} ->
+                  Repo.rollback(changeset)
+              end
           end
-        end)
 
-        camera
+        {camera, changed_qualities}
       end)
 
-    if match?({:ok, _}, result) do
-      Enum.each(source_attrs, fn {quality, url} ->
-        if url not in [nil, ""], do: stop_streams(id, quality)
-      end)
+    case result do
+      {:ok, {camera, changed_qualities}} ->
+        Enum.each(changed_qualities, &stop_streams(id, &1))
+
+        if changed_qualities != [] do
+          Phoenix.PubSub.broadcast(
+            Sentinel.PubSub,
+            "visitor_rules",
+            {:camera_sources_changed, id}
+          )
+        end
+
+        notify_camera({:ok, camera}, id)
+
+      {:error, _} = error ->
+        error
     end
-
-    notify_camera(result, id)
   end
 
   def archive_camera(id) do
@@ -132,10 +146,12 @@ defmodule Sentinel.Monitoring do
     notify_camera(result, id)
   end
 
-  defp notify_camera(result, id) do
+  defp notify_camera({:ok, _} = result, id) do
     Phoenix.PubSub.broadcast(Sentinel.PubSub, "camera_catalog", {:camera_changed, id})
     result
   end
+
+  defp notify_camera(result, _id), do: result
 
   defp stop_streams(camera_id, quality \\ nil) do
     for {{^camera_id, stream_quality}, pid} <-

@@ -66,6 +66,41 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert {:error, {:redirect, %{to: "/cameras"}}} = live(conn, ~p"/visitors")
   end
 
+  test "open history updates channel colors while preserving filters and detail", %{conn: conn} do
+    capture = event("entry", "division-1", 1, ~U[2026-11-19 12:00:00.000000Z])
+
+    {:ok, view, _} =
+      live(
+        conn,
+        "/visitors/events/#{capture.id}?mode=daily&day=2026-11-19&camera_id=division-1"
+      )
+
+    render_async(view, 1_000)
+
+    assert {:ok, _} =
+             Sentinel.Monitoring.save_camera(%{
+               id: "division-1",
+               branch: "División",
+               label: "Entrada principal",
+               color: "rose"
+             })
+
+    render_async(view, 1_000)
+
+    for selector <- [
+          "#selected-channel-color",
+          "#timeline-camera-legend",
+          "#visitor-group-#{capture.id}",
+          "#passage-link-#{capture.id}",
+          "#passage-detail"
+        ] do
+      assert has_element?(view, "#{selector} [style*='#fb7185']")
+      assert has_element?(view, selector, "Entrada principal")
+    end
+
+    assert has_element?(view, "#visitor-close-detail[href*='camera_id=division-1']")
+  end
+
   test "daily groups and bins retain URL context through detail and pagination", %{conn: conn} do
     first = event("entry", "division-1", 1, ~U[2026-11-19 12:00:00.000000Z])
 

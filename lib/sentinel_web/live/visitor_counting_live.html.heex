@@ -29,14 +29,15 @@
       class="mb-4 inline-flex items-center gap-2 text-sm text-teal-200 hover:text-teal-100"
     ><.icon name="hero-arrow-left" class="size-4" /> Volver a las imágenes</.link>
     <h2 class="mb-3 font-semibold">
-      Evento #{@event.id} · {get_in(@camera_metadata, [@event.camera_id, :label]) ||
-        @event.camera_id} · {@event.direction}
+      Evento {@event.id} ·
+      <.channel_label color={get_in(@camera_metadata, [@event.camera_id, :color])}>
+        {get_in(@camera_metadata, [@event.camera_id, :label]) || @event.camera_id}
+      </.channel_label>
+      · {@event.direction}
     </h2>
-    <span class="mb-3 inline-flex items-center gap-2 text-sm text-slate-300"><span
-      class="size-3 rounded-full"
-      style={"background-color: #{channel_color(get_in(@camera_metadata, [@event.camera_id, :color]))}"}
-      aria-hidden="true"
-    ></span>{get_in(@camera_metadata, [@event.camera_id, :branch]) || "Canal"}</span>
+    <p class="mb-3 text-sm text-slate-300">
+      {get_in(@camera_metadata, [@event.camera_id, :branch]) || "Canal"}
+    </p>
     <img
       src={"/visitors/events/#{@event.id}/snapshot"}
       alt="Captura del cruce"
@@ -115,13 +116,10 @@
     class="-mt-4 mb-6 inline-flex items-center gap-2 text-xs text-slate-400"
     id="selected-channel-color"
   >
-    <span
-      class="size-2.5 rounded-full"
-      style={"background-color: #{channel_color(get_in(@camera_metadata, [@filters.camera_id, :color]))}"}
-      aria-hidden="true"
-    ></span>
-    Canal seleccionado: {get_in(@camera_metadata, [@filters.camera_id, :label]) ||
-      @filters.camera_id}
+    Canal seleccionado:
+    <.channel_label color={get_in(@camera_metadata, [@filters.camera_id, :color])}>
+      {get_in(@camera_metadata, [@filters.camera_id, :label]) || @filters.camera_id}
+    </.channel_label>
   </p>
   <div class="mb-7 grid grid-cols-2 gap-4">
     <div id="entry-total" class="rounded-2xl border border-white/10 bg-slate-900 p-5">
@@ -215,11 +213,7 @@
         aria-label="Leyenda de cámaras"
       >
         <li :for={{camera_id, metadata} <- @camera_metadata} class="flex items-center gap-2">
-          <span
-            class="size-2.5 rounded-full"
-            style={"background-color: #{channel_color(metadata.color)}"}
-            aria-hidden="true"
-          ></span>{metadata.label} · {camera_id}
+          <.channel_label color={metadata.color}>{metadata.label} · {camera_id}</.channel_label>
         </li>
       </ul>
       <div class="mt-2 flex min-w-[720px] justify-between text-[10px] tabular-nums text-slate-500">
@@ -254,14 +248,12 @@
             )
           ]}
         >
-          <span class="block text-sm font-medium text-teal-200"><span
-            class="mr-2 inline-block size-2.5 rounded-full"
-            style={"background-color: #{channel_color(get_in(@camera_metadata, [group.camera_id, :color]))}"}
-            aria-hidden="true"
-          ></span>{get_in(@camera_metadata, [
-            group.camera_id,
-            :label
-          ]) || group.camera_id} · {group.image_count} imágenes</span><span class="mt-1 block text-xs tabular-nums text-slate-400">{Sentinel.LocalTime.format(
+          <span class="block text-sm font-medium text-teal-200">
+            <.channel_label color={get_in(@camera_metadata, [group.camera_id, :color])}>
+              {get_in(@camera_metadata, [group.camera_id, :label]) || group.camera_id}
+            </.channel_label>
+            · {group.image_count} imágenes
+          </span><span class="mt-1 block text-xs tabular-nums text-slate-400">{Sentinel.LocalTime.format(
             group.started_at,
             "%H:%M:%S"
           )}–{Sentinel.LocalTime.format(group.ended_at, "%H:%M:%S")} CST</span>
@@ -312,17 +304,10 @@
         />
         <div class="p-4">
           <p class="inline-flex items-center gap-2 text-xs font-medium text-teal-300">
-            <span
-              class="size-2.5 rounded-full"
-              style={"background-color: #{channel_color(get_in(@camera_metadata, [event.camera_id, :color]))}"}
-              aria-hidden="true"
-            ></span>
-            {get_in(@camera_metadata, [event.camera_id, :label]) || event.camera_id} · {if event.direction ==
-                                                                                             "entry",
-                                                                                           do:
-                                                                                             "Entrada",
-                                                                                           else:
-                                                                                             "Salida"}
+            <.channel_label color={get_in(@camera_metadata, [event.camera_id, :color])}>
+              {get_in(@camera_metadata, [event.camera_id, :label]) || event.camera_id}
+            </.channel_label>
+            · {if event.direction == "entry", do: "Entrada", else: "Salida"}
           </p><p class="mt-2 text-sm">{Sentinel.LocalTime.format(event.crossed_at)} CST</p><p class="mt-1 text-xs text-slate-500">
             Confianza {round(event.confidence * 100)}%
           </p>

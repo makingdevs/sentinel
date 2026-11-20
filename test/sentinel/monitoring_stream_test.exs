@@ -149,8 +149,11 @@ defmodule Sentinel.MonitoringStreamTest do
     refute_receive {:DOWN, _, :process, ^secondary_pid, _}, 50
     refute_receive {:DOWN, _, :process, ^other_camera_pid, _}, 50
 
-    for key <- [{"division-1", "secundaria"}, {"division-2", "secundaria"}] do
-      DynamicSupervisor.terminate_child(Sentinel.Monitoring.Supervisor, pids[key])
-    end
+    secondary_ref = refs[{"division-1", "secundaria"}]
+    other_ref = refs[{"division-2", "secundaria"}]
+    assert {:ok, _} = Monitoring.archive_camera("division-1")
+    assert_receive {:DOWN, ^secondary_ref, :process, ^secondary_pid, _}
+    refute_received {:DOWN, ^other_ref, :process, ^other_camera_pid, _}
+    DynamicSupervisor.terminate_child(Sentinel.Monitoring.Supervisor, other_camera_pid)
   end
 end

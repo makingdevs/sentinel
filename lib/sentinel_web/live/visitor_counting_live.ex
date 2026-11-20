@@ -82,26 +82,7 @@ defmodule SentinelWeb.VisitorCountingLive do
     _ -> %{}
   end
 
-  def channel_color(color) do
-    Map.get(
-      %{
-        "slate" => "#94a3b8",
-        "blue" => "#60a5fa",
-        "cyan" => "#22d3ee",
-        "teal" => "#2dd4bf",
-        "green" => "#4ade80",
-        "lime" => "#a3e635",
-        "amber" => "#fbbf24",
-        "orange" => "#fb923c",
-        "rose" => "#fb7185",
-        "pink" => "#f472b6",
-        "purple" => "#c084fc",
-        "indigo" => "#818cf8"
-      },
-      color,
-      "#94a3b8"
-    )
-  end
+  def channel_color(color), do: Sentinel.Monitoring.Camera.color_value(color)
 
   def bin_description(bin, metadata) do
     channel_counts =

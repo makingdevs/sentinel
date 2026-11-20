@@ -9,6 +9,7 @@ defmodule SentinelWeb.CameraCatalogLive do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_status")
       Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
+      Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
       Process.send_after(self(), :refresh_catalog, 15_000)
     end
 
@@ -30,6 +31,7 @@ defmodule SentinelWeb.CameraCatalogLive do
 
   def handle_info({:visitor_status, _id, _status}, socket), do: {:noreply, refresh(socket)}
   def handle_info({:passage_saved, _id}, socket), do: {:noreply, refresh(socket)}
+  def handle_info({:camera_changed, _id}, socket), do: {:noreply, refresh(socket)}
   defp refresh(socket), do: assign(socket, :cameras, Monitoring.admin_cameras())
 
   @impl true

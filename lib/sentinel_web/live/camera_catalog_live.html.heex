@@ -1,6 +1,6 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <main class="mx-auto max-w-5xl px-5 py-10">
-    <header class="mb-8 flex items-center justify-between">
+    <header class="mb-8 flex flex-wrap items-center justify-between gap-3">
       <div>
         <p class="text-sm text-teal-300">Sentinel · Configuración local</p>
         <h1 class="mt-2 text-3xl font-semibold">Catálogo de canales</h1>
@@ -19,7 +19,7 @@
         {if @editing_id, do: "Editar canal", else: "Nuevo canal"}
       </h2>
       <.input field={@form[:id]} label="ID estable" readonly={!!@editing_id} />
-      <.input field={@form[:branch]} label="Sucursal" />
+      <.input field={@form[:branch]} id="catalog-camera-branch" label="Sucursal" />
       <.input field={@form[:label]} label="Etiqueta" />
       <.input
         field={@form[:color]}
@@ -47,7 +47,7 @@
         <button
           :if={@editing_id}
           type="button"
-          phx-click="new"
+          phx-click={JS.push("new") |> JS.focus(to: "#edit-camera-#{@editing_id}")}
           class="rounded-lg border border-white/10 px-4 py-2"
         >Cancelar</button>
       </div>
@@ -60,13 +60,12 @@
         class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900 p-4"
       >
         <div class="flex items-center gap-3">
-          <span
-            class="size-3 rounded-full"
-            style={"background-color: #{Camera.color_value(entry.camera.color)}"}
-            aria-hidden="true"
-          ></span>
           <div>
-            <p class="font-medium">{entry.camera.label} · {entry.camera.id}</p>
+            <p class="font-medium">
+              <.channel_label color={entry.camera.color}>
+                {entry.camera.label} · {entry.camera.id}
+              </.channel_label>
+            </p>
             <p class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span class={counting_badge_class(entry)}>{counting_text(entry)}</span>
               <span>Última captura {if entry.last_capture,
@@ -86,13 +85,15 @@
         <div class="flex gap-2">
           <button
             :if={!entry.camera.archived_at}
-            phx-click="edit"
+            id={"edit-camera-#{entry.camera.id}"}
+            phx-click={JS.push("edit") |> JS.focus(to: "#catalog-camera-branch")}
             phx-value-id={entry.camera.id}
             class="rounded-lg border border-white/10 px-3 py-2 text-sm"
           >Editar</button>
           <button
             :if={!entry.camera.archived_at}
             phx-click="archive"
+            data-confirm="¿Archivar este canal? Se detendrá su conteo y se conservará el historial."
             phx-value-id={entry.camera.id}
             class="rounded-lg border border-white/10 px-3 py-2 text-sm"
           >Archivar</button>

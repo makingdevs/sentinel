@@ -102,6 +102,42 @@ defmodule Sentinel.VisitorCounting.ManagerTest do
     refute_received {:media_started, _, _}
   end
 
+  test "source replacement and archive reconcile only the affected counter" do
+    assert {:ok, _} = VisitorCounting.configure_rule("division-1", %{enabled: true})
+    assert {:ok, _} = VisitorCounting.configure_rule("division-2", %{enabled: true})
+    start_supervised!({Manager, max_cameras: 2})
+    assert_receive {:media_started, first, %{rule: %{camera_id: "division-1"}}}
+    assert_receive {:media_started, other, %{rule: %{camera_id: "division-2"}}}
+    first_ref = Process.monitor(first)
+    other_ref = Process.monitor(other)
+
+    camera = %{id: "division-1", branch: "División", label: "Entrada", color: "rose"}
+    assert {:ok, _} = Monitoring.save_camera(camera)
+    assert Manager.sync() == :ok
+    refute_received {:DOWN, ^first_ref, :process, ^first, _}
+
+    assert {:ok, _} =
+             Monitoring.save_camera(camera, %{"secundaria" => "rtsp://example.test/replacement"})
+
+    assert_receive {:DOWN, ^first_ref, :process, ^first, :normal}
+
+    assert_receive {:media_started, replacement,
+                    %{
+                      rule: %{camera_id: "division-1"},
+                      source_url: "rtsp://example.test/replacement"
+                    }}
+
+    replacement_ref = Process.monitor(replacement)
+    assert {:ok, _} = Monitoring.archive_camera("division-1")
+    assert_receive {:DOWN, ^replacement_ref, :process, ^replacement, :normal}
+    assert Manager.status("division-1") == :disabled
+    assert {:ok, _} = Monitoring.restore_camera("division-1")
+    assert Manager.sync() == :ok
+    assert Manager.status("division-1") == :disabled
+    refute_received {:media_started, _, %{rule: %{camera_id: "division-1"}}}
+    refute_received {:DOWN, ^other_ref, :process, ^other, _}
+  end
+
   test "a previous primary registration does not block a new secondary session" do
     config = Application.fetch_env!(:sentinel, :visitor_counting)
 

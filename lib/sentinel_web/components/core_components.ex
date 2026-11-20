@@ -31,6 +31,21 @@ defmodule SentinelWeb.CoreComponents do
 
   alias Phoenix.LiveView.JS
 
+  attr :color, :string, default: nil
+  slot :inner_block, required: true
+
+  def channel_label(assigns) do
+    ~H"""
+    <span class="inline-flex items-center gap-2">
+      <span
+        class="size-2.5 shrink-0 rounded-full"
+        style={"background-color: #{Sentinel.Monitoring.Camera.color_value(@color)}"}
+        aria-hidden="true"
+      ></span>{render_slot(@inner_block)}
+    </span>
+    """
+  end
+
   @doc """
   Renders flash notices.
 

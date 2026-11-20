@@ -47,10 +47,17 @@ defmodule SentinelWeb.CameraCatalogLiveTest do
     assert %{status: 403} = get(remote_conn, ~p"/cameras/catalog")
   end
 
-  test "catalog edits metadata and archives a channel", %{conn: conn} do
-    Repo.insert!(%Camera{id: "division-1", branch: "División", label: "Cámara 1"})
+  test "catalog creates, edits, archives and restores a channel", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/cameras/catalog")
-    view |> element("button[phx-click=edit][phx-value-id=division-1]") |> render_click()
+
+    view
+    |> form("#camera-catalog-form",
+      camera: %{id: "division-1", branch: "División", label: "Cámara 1"}
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#catalog-camera-division-1", "Cámara 1")
+    view |> element("#edit-camera-division-1") |> render_click()
 
     view
     |> form("#camera-catalog-form", camera: %{label: "Entrada", color: "rose"})
@@ -58,12 +65,29 @@ defmodule SentinelWeb.CameraCatalogLiveTest do
 
     assert has_element?(view, "#camera-catalog-form")
     assert Repo.get!(Camera, "division-1").label == "Entrada"
+    assert has_element?(view, "#catalog-camera-division-1 [style*='#fb7185']")
+
+    assert has_element?(
+             view,
+             "#catalog-camera-division-1 button[phx-click=archive][data-confirm]"
+           )
+
     view |> element("button[phx-click=archive][phx-value-id=division-1]") |> render_click()
     assert Repo.get!(Camera, "division-1").archived_at
+    view |> element("button[phx-click=restore][phx-value-id=division-1]") |> render_click()
+    assert has_element?(view, "#edit-camera-division-1")
+    assert is_nil(Repo.get!(Camera, "division-1").archived_at)
   end
 
   test "catalog shows persisted latest capture per channel", %{conn: conn} do
     Repo.insert!(%Camera{id: "division-1", branch: "División", label: "Cámara 1"})
+    {:ok, view, _html} = live(conn, ~p"/cameras/catalog")
+    assert has_element?(view, "#catalog-camera-division-1", "Sin captura persistida")
+    view |> element("#edit-camera-division-1") |> render_click()
+
+    view
+    |> form("#camera-catalog-form", camera: %{label: "Edición sin guardar"})
+    |> render_change()
 
     attrs = %{
       camera_id: "division-1",
@@ -83,10 +107,10 @@ defmodule SentinelWeb.CameraCatalogLiveTest do
       snapshot_height: 1080
     }
 
-    assert {:ok, _event, :inserted} = Sentinel.VisitorCounting.create_event(attrs)
-    {:ok, view, _html} = live(conn, ~p"/cameras/catalog")
-    assert has_element?(view, "#camera-catalog-form")
+    assert {:ok, event, :inserted} = Sentinel.VisitorCounting.create_event(attrs)
+    Phoenix.PubSub.broadcast(Sentinel.PubSub, "visitor_events", {:passage_saved, event.id})
+    assert has_element?(view, "#camera-catalog-form input[value='Edición sin guardar']")
     assert has_element?(view, "#catalog-camera-division-1 .rounded-full", "Deshabilitado")
-    assert render(view) =~ "06:00:05"
+    assert has_element?(view, "#catalog-camera-division-1", "06:00:05 CST")
   end
 end
