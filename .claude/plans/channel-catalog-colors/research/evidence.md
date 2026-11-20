@@ -1,0 +1,7 @@
+# Evidencia del repositorio
+
+- `Monitoring.Camera` ya guarda ID textual, sucursal y etiqueta. `CameraSource` guarda URL privada por calidad principal/secundaria. La migración de configuración borra fuentes en cascada si se borra la cámara. Las reglas y cruces guardan el ID textual por separado. Conviene conservar ID e historial mediante archivo lógico y conservar color al reimportar semillas.
+- `Monitoring.list_cameras/0` y `fetch_camera/1` proyectan metadatos públicos. `source_url/2` obtiene RTSP con log deshabilitado. Mantener proyecciones separadas para visualización pública, historial y administración. El catálogo de gestión puede reutilizar el acceso local del router de visitantes.
+- `Timeline.activity/3` agrupa densidad solo por intervalo. Para conservar la distinción cuando varias cámaras coinciden, agregar por intervalo y cámara, y sumar ambos en el total existente. Los grupos y eventos ya incluyen ID. Las tarjetas de cámaras, filtros y etiquetas del historial necesitan una presentación de canal común.
+- `Manager.status/1` describe el contador; `Writer.stats/1` tiene métricas volátiles y publica `visitor_events` después de guardar. Para demostrar captura persistida se necesita el último cruce guardado, consultado en lote. La aplicación ya separa indicadores de formularios en `CountingStatusComponent`.
+- Cambiar fuentes afecta consumidores activos: el Manager reconcilia reglas y los lectores resuelven URLs al conectar. La implementación debe contemplar invalidación dirigida y verificar que no se reinicien otros canales.
