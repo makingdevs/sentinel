@@ -2,6 +2,7 @@ defmodule SentinelWeb.CameraLive do
   use SentinelWeb, :live_view
 
   alias Sentinel.Monitoring
+  alias SentinelWeb.CountingStatusComponent
 
   @limit 8
 
@@ -183,27 +184,24 @@ defmodule SentinelWeb.CameraLive do
   @impl true
   def handle_info(:counting_status, socket) do
     Process.send_after(self(), :counting_status, 2_000)
-    {:noreply, refresh_counting(socket)}
-  end
 
-  def handle_info({:visitor_status, _id, _status}, socket),
-    do: {:noreply, refresh_counting(socket)}
-
-  defp refresh_counting(socket) do
-    Enum.reduce(socket.assigns.selected, socket, fn {_id, card}, socket ->
-      put_card(socket, card)
-    end)
-  end
-
-  defp counting_status_text(status) do
-    case status do
-      :disabled -> "Deshabilitado"
-      :loading -> "Cargando"
-      :active -> "Contando"
-      :saturated -> "Saturado"
-      :capacity -> "Sin capacidad"
-      :error -> "Sin conexión · reintentando"
+    if socket.assigns.visitor_access? do
+      for {id, _card} <- socket.assigns.selected, do: refresh_counting(id)
     end
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:visitor_status, id, _status}, socket) do
+    if socket.assigns.visitor_access? and Map.has_key?(socket.assigns.selected, id) do
+      refresh_counting(id)
+    end
+
+    {:noreply, socket}
+  end
+
+  defp refresh_counting(id) do
+    send_update(CountingStatusComponent, id: "counting-indicators-#{id}", camera_id: id)
   end
 
   defp put_counting_form(socket, card, changeset) do
@@ -233,8 +231,6 @@ defmodule SentinelWeb.CameraLive do
   end
 
   defp put_card(socket, card) do
-    card = Map.put(card, :counting_status, Sentinel.VisitorCounting.Manager.status(card.id))
-    card = Map.put(card, :counting_stats, Sentinel.VisitorCounting.Writer.stats(card.id))
     card = Map.put(card, :form, to_form(%{"value" => card.quality}, as: :quality))
     card = Map.put(card, :detection_form, to_form(%{"engine" => card.engine}, as: :detection))
     selected = Map.put(socket.assigns.selected, card.id, card)

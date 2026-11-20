@@ -224,22 +224,11 @@
           </button>
         </div>
         <div :if={@visitor_access?} class="border-t border-white/10 px-4 py-4">
-          <p
-            id={"counting-status-#{camera.id}"}
-            class="mb-2 text-xs text-slate-400"
-            aria-live="polite"
-          >
-            Conteo continuo:
-            <span class="text-teal-300">{counting_status_text(camera.counting_status)}</span>
-            · Cola {camera.counting_stats.queued}/{camera.counting_stats.capacity}
-          </p>
-          <p
-            :if={camera.counting_stats.dropped > 0 or camera.counting_stats.failures > 0}
-            id={"counting-losses-#{camera.id}"}
-            class="mb-3 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-200"
-          >
-            {camera.counting_stats.dropped} cruces no guardados · {camera.counting_stats.failures} intentos fallidos desde el arranque del escritor. El historial puede estar incompleto.
-          </p>
+          <.live_component
+            module={CountingStatusComponent}
+            id={"counting-indicators-#{camera.id}"}
+            camera_id={camera.id}
+          />
           <button
             id={"configure-counting-#{camera.id}"}
             phx-click="configure-counting"
