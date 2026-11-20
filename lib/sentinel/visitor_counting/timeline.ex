@@ -49,8 +49,8 @@ defmodule Sentinel.VisitorCounting.Timeline do
            Repo.query(
              """
              WITH filtered AS (#{@filtered})
-             SELECT floor(extract(epoch FROM (image_at - $1)) / 300)::integer AS bin, count(*)
-             FROM filtered GROUP BY bin ORDER BY bin
+             SELECT floor(extract(epoch FROM (image_at - $1)) / 300)::integer AS bin, camera_id, count(*)
+             FROM filtered GROUP BY bin, camera_id ORDER BY bin, camera_id
              """,
              params
            ),
@@ -68,7 +68,13 @@ defmodule Sentinel.VisitorCounting.Timeline do
              @groups <> "SELECT count(*), COALESCE(sum(image_count), 0)::bigint FROM groups",
              params
            ) do
-      counts = Map.new(density.rows, fn [bin, count] -> {bin, count} end)
+      camera_counts = Enum.group_by(density.rows, fn [bin, _camera, _count] -> bin end)
+
+      counts =
+        Enum.reduce(density.rows, %{}, fn [bin, _camera, count], acc ->
+          Map.update(acc, bin, count, &(&1 + count))
+        end)
+
       [[group_count, image_count]] = totals.rows
 
       groups =
@@ -84,7 +90,15 @@ defmodule Sentinel.VisitorCounting.Timeline do
 
       {:ok,
        %{
-         bins: for(bin <- 0..287, do: %{id: bin, count: Map.get(counts, bin, 0)}),
+         bins:
+           for bin <- 0..287 do
+             cameras =
+               Enum.map(Map.get(camera_counts, bin, []), fn [_bin, camera_id, count] ->
+                 %{camera_id: camera_id, count: count}
+               end)
+
+             %{id: bin, count: Map.get(counts, bin, 0), cameras: cameras}
+           end,
          groups: groups,
          group_count: group_count,
          image_count: image_count,

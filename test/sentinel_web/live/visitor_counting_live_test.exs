@@ -7,6 +7,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
 
   import Ecto.Query
   alias Sentinel.Repo
+  alias Sentinel.Monitoring.Camera
   import Phoenix.LiveViewTest
   alias Sentinel.VisitorCounting
 
@@ -110,6 +111,24 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     view |> element("#visitor-reset-selection") |> render_click()
     render_async(view)
     assert has_element?(view, "#visitor-next:not([disabled])")
+  end
+
+  test "catalog changes refresh daily labels without changing active URL filters", %{conn: conn} do
+    saved = event("entry", "division-1", 1, ~U[2026-11-19 12:00:00.000000Z])
+    day = Date.to_iso8601(DateTime.to_date(saved.crossed_at))
+    {:ok, view, _} = live(conn, "/visitors?mode=daily&day=#{day}&camera_id=division-1")
+    render_async(view)
+    assert has_element?(view, "#visitor-group-#{saved.id}", "Cámara 1")
+
+    camera = Repo.get!(Camera, "division-1")
+    Repo.update!(Ecto.Changeset.change(camera, label: "Entrada", color: "rose"))
+    send(view.pid, {:camera_changed, camera.id})
+    _ = :sys.get_state(view.pid)
+    render_async(view)
+
+    assert has_element?(view, "#visitor-group-#{saved.id}", "Entrada")
+    assert has_element?(view, "#visitor-group-#{saved.id} [style='background-color: #fb7185']")
+    assert has_element?(view, "#visitor-filters")
   end
 
   test "coalesces bursts and reconciles a deleted selected group without new crossings", %{

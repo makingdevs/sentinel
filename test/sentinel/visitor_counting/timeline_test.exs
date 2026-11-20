@@ -36,6 +36,10 @@ defmodule Sentinel.VisitorCounting.TimelineTest do
     assert data.group_count == 3
     assert length(data.bins) == 288
     assert Enum.sum(Enum.map(data.bins, & &1.count)) == 5
+    first_bin = Enum.at(data.bins, 0)
+    assert first_bin.count == 5
+    assert Map.new(first_bin.cameras, &{&1.camera_id, &1.count}) == %{"a" => 4, "b" => 1}
+    assert Enum.sum(Enum.map(first_bin.cameras, & &1.count)) == first_bin.count
     assert Enum.map(data.groups, & &1.image_count) == [3, 1, 1]
 
     assert {:ok, images} =

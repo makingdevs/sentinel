@@ -9,6 +9,7 @@ defmodule SentinelWeb.VisitorCountingLive do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
+      Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
       Process.send_after(self(), :retention_refresh, 60_000)
     end
 
@@ -22,6 +23,7 @@ defmodule SentinelWeb.VisitorCountingLive do
        current_scope: nil,
        filters: Ecto.Changeset.apply_changes(changeset),
        form: to_form(changeset, as: :filters),
+       camera_metadata: %{},
        camera_options: [{"Todas las cámaras", ""} | cameras],
        page: 1,
        group_page: 1,
@@ -57,6 +59,7 @@ defmodule SentinelWeb.VisitorCountingLive do
             filters: filters,
             form: to_form(changeset, as: :filters),
             url_params: Map.take(params, @state_keys),
+            camera_metadata: camera_metadata(),
             event_id: safe_event_id(params["event_id"]),
             page: page(params["page"]),
             group_page: page(params["group_page"])
@@ -67,6 +70,48 @@ defmodule SentinelWeb.VisitorCountingLive do
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :filters))}
     end
+  end
+
+  defp camera_metadata do
+    Sentinel.Monitoring.admin_cameras()
+    |> Map.new(fn entry ->
+      camera = entry.camera
+      {camera.id, %{label: camera.label, branch: camera.branch, color: camera.color}}
+    end)
+  rescue
+    _ -> %{}
+  end
+
+  def channel_color(color) do
+    Map.get(
+      %{
+        "slate" => "#94a3b8",
+        "blue" => "#60a5fa",
+        "cyan" => "#22d3ee",
+        "teal" => "#2dd4bf",
+        "green" => "#4ade80",
+        "lime" => "#a3e635",
+        "amber" => "#fbbf24",
+        "orange" => "#fb923c",
+        "rose" => "#fb7185",
+        "pink" => "#f472b6",
+        "purple" => "#c084fc",
+        "indigo" => "#818cf8"
+      },
+      color,
+      "#94a3b8"
+    )
+  end
+
+  def bin_description(bin, metadata) do
+    channel_counts =
+      Enum.map_join(bin.cameras, ", ", fn camera ->
+        name = get_in(metadata, [camera.camera_id, :label]) || camera.camera_id
+        "#{name}: #{camera.count}"
+      end)
+
+    base = "#{bin_time(bin.id)} CST: #{bin.count} imágenes"
+    if channel_counts == "", do: base, else: base <> ". " <> channel_counts
   end
 
   @impl true
@@ -124,6 +169,13 @@ defmodule SentinelWeb.VisitorCountingLive do
     do: push_patch(socket, to: history_path(Map.merge(socket.assigns.url_params, updates)))
 
   @impl true
+  def handle_info({:camera_changed, _id}, socket) do
+    {:noreply,
+     socket
+     |> assign(:camera_metadata, camera_metadata())
+     |> refresh()}
+  end
+
   def handle_info({:passage_saved, _}, socket), do: {:noreply, schedule_refresh(socket)}
   def handle_info(:passages_pruned, socket), do: {:noreply, schedule_refresh(socket)}
 
