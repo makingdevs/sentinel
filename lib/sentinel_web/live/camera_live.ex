@@ -207,7 +207,7 @@ defmodule SentinelWeb.CameraLive do
   defp put_counting_form(socket, card, changeset) do
     card =
       Map.merge(card, %{
-        counting_form: to_form(changeset, as: :rule),
+        counting_form: to_form(changeset, as: :rule, id: "counting-rule-#{card.id}"),
         counting_rule: Ecto.Changeset.apply_changes(changeset)
       })
 

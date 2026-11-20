@@ -46,6 +46,34 @@ defmodule SentinelWeb.CountingCalibrationTest do
     assert has_element?(view, "#counting-status-division-1")
   end
 
+  test "two open calibrations have separate controls and save independently", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/cameras")
+
+    for camera_id <- ["division-1", "division-2"] do
+      view
+      |> form("#camera-selection-form", selection: %{camera_id: camera_id})
+      |> render_submit()
+
+      view |> element("#configure-counting-#{camera_id}") |> render_click()
+    end
+
+    for camera_id <- ["division-1", "division-2"],
+        field <- ~w(x1 y1 x2 y2 engine entry_direction confidence enabled) do
+      assert has_element?(
+               view,
+               ~s(#counting-rule-#{camera_id} #counting-rule-#{camera_id}_#{field}[name="rule[#{field}]"])
+             )
+    end
+
+    view
+    |> form("#counting-rule-division-2", rule: %{engine: "elixir"})
+    |> render_submit()
+
+    assert VisitorCounting.get_rule("division-2").engine == "elixir"
+    refute VisitorCounting.get_rule("division-1")
+    assert has_element?(view, "#counting-rule-division-1_engine option[value=python][selected]")
+  end
+
   test "remote viewers cannot forge calibration writes", %{conn: conn} do
     conn = put_private(conn, :live_view_connect_info, %{peer_data: %{address: {203, 0, 113, 1}}})
     {:ok, view, _} = live(%{conn | remote_ip: {203, 0, 113, 1}}, ~p"/cameras")
