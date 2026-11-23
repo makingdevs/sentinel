@@ -57,56 +57,70 @@ defmodule Sentinel.Monitoring do
 
   def save_camera(attrs, source_attrs \\ %{}) do
     id = attrs["id"] || attrs[:id]
-    camera = if is_binary(id), do: Repo.get(Camera, id), else: nil
-    changeset = Camera.changeset(camera || %Camera{}, attrs)
+
+    changeset = Camera.changeset(camera_for_save(id) || %Camera{}, attrs)
 
     result =
       Repo.transaction(fn ->
-        camera =
-          case Repo.insert_or_update(changeset, log: false) do
-            {:ok, camera} -> camera
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-
-        changed_qualities =
-          for {quality, url} <- source_attrs, url not in [nil, ""], reduce: [] do
-            changed ->
-              source =
-                Repo.get_by(CameraSource, camera_id: camera.id, quality: quality) ||
-                  %CameraSource{camera_id: camera.id}
-
-              source_changeset = CameraSource.changeset(source, %{quality: quality, url: url})
-
-              case Repo.insert_or_update(source_changeset, log: false) do
-                {:ok, _source} ->
-                  if Ecto.Changeset.changed?(source_changeset, :url),
-                    do: [quality | changed],
-                    else: changed
-
-                {:error, changeset} ->
-                  Repo.rollback(changeset)
-              end
-          end
-
-        {camera, changed_qualities}
+        camera = save_camera_record(changeset)
+        {camera, save_sources(camera, source_attrs)}
       end)
 
     case result do
       {:ok, {camera, changed_qualities}} ->
         Enum.each(changed_qualities, &stop_streams(id, &1))
 
-        if changed_qualities != [] do
-          Phoenix.PubSub.broadcast(
-            Sentinel.PubSub,
-            "visitor_rules",
-            {:camera_sources_changed, id}
-          )
+        case changed_qualities do
+          [] ->
+            nil
+
+          _ ->
+            Phoenix.PubSub.broadcast(
+              Sentinel.PubSub,
+              "visitor_rules",
+              {:camera_sources_changed, id}
+            )
         end
 
         notify_camera({:ok, camera}, id)
 
       {:error, _} = error ->
         error
+    end
+  end
+
+  defp camera_for_save(id) when is_binary(id), do: Repo.get(Camera, id)
+  defp camera_for_save(_id), do: nil
+
+  defp save_camera_record(changeset) do
+    case Repo.insert_or_update(changeset, log: false) do
+      {:ok, camera} -> camera
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
+
+  defp save_sources(camera, source_attrs) do
+    for {quality, url} <- source_attrs, url not in [nil, ""], reduce: [] do
+      changed -> save_source(camera, quality, url, changed)
+    end
+  end
+
+  defp save_source(camera, quality, url, changed) do
+    source =
+      Repo.get_by(CameraSource, camera_id: camera.id, quality: quality) ||
+        %CameraSource{camera_id: camera.id}
+
+    changeset = CameraSource.changeset(source, %{quality: quality, url: url})
+
+    case Repo.insert_or_update(changeset, log: false) do
+      {:ok, _source} ->
+        case Ecto.Changeset.changed?(changeset, :url) do
+          true -> [quality | changed]
+          false -> changed
+        end
+
+      {:error, changeset} ->
+        Repo.rollback(changeset)
     end
   end
 
@@ -124,7 +138,11 @@ defmodule Sentinel.Monitoring do
         :ok
       end)
 
-    if match?({:ok, _}, result), do: stop_streams(id)
+    case result do
+      {:ok, _} -> stop_streams(id)
+      {:error, _} -> nil
+    end
+
     notify_camera(result, id)
   end
 
@@ -206,7 +224,10 @@ defmodule Sentinel.Monitoring do
   def validate_selection(id, quality) do
     with {:ok, _camera} <- fetch_camera(id),
          false <- archived?(id) do
-      if quality in @qualities, do: :ok, else: {:error, :unknown_quality}
+      cond do
+        quality in @qualities -> :ok
+        true -> {:error, :unknown_quality}
+      end
     else
       true -> {:error, :unknown_camera}
       error -> error
@@ -321,9 +342,10 @@ defmodule Sentinel.Monitoring do
   defp stream_key(id, quality, engine), do: {id, quality, engine}
 
   defp validate_filename(filename) when is_binary(filename) do
-    if Regex.match?(~r/\A[a-zA-Z0-9_-]+\.(m3u8|m4s|mp4)\z/, filename),
-      do: :ok,
-      else: {:error, :invalid_filename}
+    cond do
+      Regex.match?(~r/\A[a-zA-Z0-9_-]+\.(m3u8|m4s|mp4)\z/, filename) -> :ok
+      true -> {:error, :invalid_filename}
+    end
   end
 
   defp validate_filename(_filename), do: {:error, :invalid_filename}

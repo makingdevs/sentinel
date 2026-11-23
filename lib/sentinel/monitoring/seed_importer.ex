@@ -46,12 +46,14 @@ defmodule Sentinel.Monitoring.SeedImporter do
     Enum.reduce_while(catalog(), {:ok, []}, fn camera, {:ok, rows} ->
       connections = Map.get(sources, camera.id)
 
-      if is_map(connections) and
-           Enum.all?(@qualities, &CameraSource.valid_url?(Map.get(connections, &1))) do
-        {:cont, {:ok, [{camera, connections} | rows]}}
-      else
-        {:halt,
-         {:error, "Camera #{camera.id} needs principal and secundaria RTSP URLs with a host"}}
+      cond do
+        is_map(connections) and
+            Enum.all?(@qualities, &CameraSource.valid_url?(Map.get(connections, &1))) ->
+          {:cont, {:ok, [{camera, connections} | rows]}}
+
+        true ->
+          {:halt,
+           {:error, "Camera #{camera.id} needs principal and secundaria RTSP URLs with a host"}}
       end
     end)
   end

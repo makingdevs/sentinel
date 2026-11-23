@@ -44,7 +44,7 @@ defmodule Sentinel.Monitoring.Stream do
     state = %{
       directory: directory,
       engine: engine,
-      detection_status: if(engine == "off", do: :off, else: :loading),
+      detection_status: initial_detection_status(engine),
       source_url: Keyword.fetch!(options, :source_url),
       runner: Keyword.get(options, :pipeline_module, Sentinel.Monitoring.Pipeline),
       pipeline: nil,
@@ -72,16 +72,18 @@ defmodule Sentinel.Monitoring.Stream do
 
   def handle_call({:file, filename}, _from, state) do
     result =
-      if state.ready?,
-        do: File.read(Path.join(state.directory, filename)),
-        else: {:error, state.error}
+      cond do
+        state.ready? -> File.read(Path.join(state.directory, filename))
+        true -> {:error, state.error}
+      end
 
     {:reply, result, %{state | last_access: now()}}
   end
 
   @impl true
   def handle_cast(:retry_detector, state) do
-    if state.pipeline, do: send(state.pipeline, :retry_detector)
+    retry_detector(state.pipeline)
+
     {:noreply, state}
   end
 
@@ -105,10 +107,10 @@ defmodule Sentinel.Monitoring.Stream do
          monitor: nil,
          ready?: false,
          error:
-           if(state.error == :unsupported_codec,
-             do: :unsupported_codec,
-             else: :stream_unavailable
-           )
+           case state.error do
+             :unsupported_codec -> :unsupported_codec
+             _ -> :stream_unavailable
+           end
      }}
   end
 
@@ -118,9 +120,10 @@ defmodule Sentinel.Monitoring.Stream do
     token = progress_token(state.directory)
 
     state =
-      if token != state.progress_token,
-        do: %{state | progress_token: token, last_progress: now()},
-        else: state
+      cond do
+        token != state.progress_token -> %{state | progress_token: token, last_progress: now()}
+        true -> state
+      end
 
     cond do
       now() - state.last_access >= state.idle_ms ->
@@ -150,7 +153,8 @@ defmodule Sentinel.Monitoring.Stream do
 
   @impl true
   def terminate(_reason, state) do
-    if state.pipeline, do: state.runner.stop(state.pipeline)
+    stop_pipeline(state)
+
     # This directory is created and owned exclusively by this worker.
     File.rm_rf(state.directory)
     :ok
@@ -183,7 +187,7 @@ defmodule Sentinel.Monitoring.Stream do
              last_progress: now(),
              progress_token: nil,
              ready?: false,
-             detection_status: if(state.engine == "off", do: :off, else: :loading)
+             detection_status: initial_detection_status(state.engine)
          }}
 
       {:error, _reason} ->
@@ -191,6 +195,13 @@ defmodule Sentinel.Monitoring.Stream do
         {:noreply, %{state | error: :stream_unavailable}}
     end
   end
+
+  defp initial_detection_status("off"), do: :off
+  defp initial_detection_status(_engine), do: :loading
+  defp retry_detector(nil), do: nil
+  defp retry_detector(pipeline), do: send(pipeline, :retry_detector)
+  defp stop_pipeline(%{pipeline: nil}), do: nil
+  defp stop_pipeline(state), do: state.runner.stop(state.pipeline)
 
   defp check_interval(state), do: min(5_000, min(state.idle_ms, state.stall_ms))
 

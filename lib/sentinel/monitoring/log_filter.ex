@@ -8,10 +8,9 @@ defmodule Sentinel.Monitoring.LogFilter do
   end
 
   defp redact(value) when is_list(value) do
-    if printable_ascii?(value) do
-      value |> List.to_string() |> redact() |> String.to_charlist()
-    else
-      redact_list(value)
+    cond do
+      printable_ascii?(value) -> value |> List.to_string() |> redact() |> String.to_charlist()
+      true -> redact_list(value)
     end
   end
 

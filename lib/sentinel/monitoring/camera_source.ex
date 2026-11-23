@@ -16,7 +16,10 @@ defmodule Sentinel.Monitoring.CameraSource do
     |> validate_required([:camera_id, :quality, :url])
     |> validate_inclusion(:quality, ~w(principal secundaria))
     |> validate_change(:url, fn :url, url ->
-      if valid_url?(url), do: [], else: [url: "must be an RTSP URL with a host"]
+      cond do
+        valid_url?(url) -> []
+        true -> [url: "must be an RTSP URL with a host"]
+      end
     end)
     |> foreign_key_constraint(:camera_id)
     |> unique_constraint([:camera_id, :quality])
