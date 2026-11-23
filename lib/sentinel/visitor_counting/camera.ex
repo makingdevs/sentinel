@@ -36,10 +36,14 @@ defmodule Sentinel.VisitorCounting.Camera do
       metrics: %{frames: 0, crossings: 0}
     }
 
-    if VisitorCounting.config(:primary_snapshots, false) and
-         (VisitorCounting.config(:primary_snapshot_cameras, :all) == :all or
-            state.rule.camera_id in VisitorCounting.config(:primary_snapshot_cameras, [])) do
-      send(self(), :start_snapshot_source)
+    cond do
+      VisitorCounting.config(:primary_snapshots, false) and
+          (VisitorCounting.config(:primary_snapshot_cameras, :all) == :all or
+             state.rule.camera_id in VisitorCounting.config(:primary_snapshot_cameras, [])) ->
+        send(self(), :start_snapshot_source)
+
+      true ->
+        nil
     end
 
     Process.send_after(self(), :watchdog, 5_000)
@@ -53,7 +57,12 @@ defmodule Sentinel.VisitorCounting.Camera do
   def handle_call(:status, _from, state) do
     stats = Sentinel.VisitorCounting.Writer.stats(state.rule.camera_id)
     saturated? = stats.capacity > 0 and stats.queued >= stats.capacity
-    {:reply, if(saturated?, do: :saturated, else: state.status), state}
+
+    {:reply,
+     cond do
+       saturated? -> :saturated
+       true -> state.status
+     end, state}
   end
 
   @impl true
@@ -73,14 +82,14 @@ defmodule Sentinel.VisitorCounting.Camera do
   def handle_info({:connect, token}, %{timer: token} = state),
     do: {:noreply, connect(%{state | timer: nil})}
 
-  def handle_info({:analytics_status, pid, status}, %{pipeline: pid} = state) do
-    if status == :error do
-      {:noreply, disconnect(state)}
-    else
-      {:noreply,
-       publish(%{state | attempt: if(status == :active, do: 0, else: state.attempt)}, status)}
-    end
-  end
+  def handle_info({:analytics_status, pid, :error}, %{pipeline: pid} = state),
+    do: {:noreply, disconnect(state)}
+
+  def handle_info({:analytics_status, pid, :active}, %{pipeline: pid} = state),
+    do: {:noreply, state |> Map.put(:attempt, 0) |> publish(:active)}
+
+  def handle_info({:analytics_status, pid, status}, %{pipeline: pid} = state),
+    do: {:noreply, publish(state, status)}
 
   def handle_info({:analytics_progress, pid, crossings}, %{pipeline: pid} = state) do
     metrics = %{frames: state.metrics.frames + 1, crossings: state.metrics.crossings + crossings}
@@ -95,12 +104,18 @@ defmodule Sentinel.VisitorCounting.Camera do
 
   def handle_info(:watchdog, state) do
     Process.send_after(self(), :watchdog, 5_000)
-    timeout = if state.status == :loading, do: 130_000, else: 30_000
+
+    timeout =
+      case state.status do
+        :loading -> 130_000
+        _ -> 30000
+      end
 
     state =
-      if state.pipeline != nil and now() - state.last_progress > timeout,
-        do: disconnect(state),
-        else: state
+      cond do
+        state.pipeline != nil and now() - state.last_progress > timeout -> disconnect(state)
+        true -> state
+      end
 
     {:noreply, state}
   end
@@ -135,8 +150,9 @@ defmodule Sentinel.VisitorCounting.Camera do
   end
 
   defp disconnect(state) do
-    if state.monitor, do: Process.demonitor(state.monitor, [:flush])
-    if state.pipeline, do: stop_pipeline(state)
+    demonitor(state.monitor)
+    stop_pipeline(state)
+
     retry(%{state | pipeline: nil, monitor: nil})
   end
 
@@ -155,23 +171,29 @@ defmodule Sentinel.VisitorCounting.Camera do
     publish(%{state | timer: token, attempt: state.attempt + 1}, :error)
   end
 
+  defp publish(%{status: status} = state, status), do: state
+
   defp publish(state, status) do
-    if state.status != status do
-      Phoenix.PubSub.broadcast(
-        Sentinel.PubSub,
-        "visitor_status",
-        {:visitor_status, state.rule.camera_id, status}
-      )
-    end
+    Phoenix.PubSub.broadcast(
+      Sentinel.PubSub,
+      "visitor_status",
+      {:visitor_status, state.rule.camera_id, status}
+    )
 
     %{state | status: status}
   end
 
+  defp demonitor(nil), do: nil
+  defp demonitor(ref), do: Process.demonitor(ref, [:flush])
+
   @impl true
   def terminate(_reason, state) do
-    if state.pipeline, do: stop_pipeline(state)
+    stop_pipeline(state)
+
     :ok
   end
+
+  defp stop_pipeline(%{pipeline: nil}), do: nil
 
   defp stop_pipeline(state) do
     state.runner.stop(state.pipeline)

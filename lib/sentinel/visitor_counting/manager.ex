@@ -44,8 +44,14 @@ defmodule Sentinel.VisitorCounting.Manager do
   def handle_call({:status, id}, _from, state) do
     status =
       case Map.get(state.children, id) do
-        nil -> if MapSet.member?(state.capacity, id), do: :capacity, else: :disabled
-        %{pid: pid} -> Camera.status(pid)
+        nil ->
+          cond do
+            MapSet.member?(state.capacity, id) -> :capacity
+            true -> :disabled
+          end
+
+        %{pid: pid} ->
+          Camera.status(pid)
       end
 
     {:reply, status, state}
@@ -62,7 +68,9 @@ defmodule Sentinel.VisitorCounting.Manager do
 
   def handle_info({:camera_sources_changed, id}, state) do
     {child, children} = Map.pop(state.children, id)
-    if child, do: stop_child(child)
+
+    stop_child(child)
+
     {:noreply, reconcile(%{state | children: children})}
   end
 
@@ -77,11 +85,13 @@ defmodule Sentinel.VisitorCounting.Manager do
 
     children =
       Enum.reduce(state.children, state.children, fn {id, child}, children ->
-        if not Map.has_key?(wanted, id) or wanted[id].revision != child.revision do
-          stop_child(child)
-          Map.delete(children, id)
-        else
-          children
+        cond do
+          not Map.has_key?(wanted, id) or wanted[id].revision != child.revision ->
+            stop_child(child)
+            Map.delete(children, id)
+
+          true ->
+            children
         end
       end)
 
@@ -123,6 +133,8 @@ defmodule Sentinel.VisitorCounting.Manager do
   rescue
     _ in [Postgrex.Error, DBConnection.ConnectionError] -> state
   end
+
+  defp stop_child(nil), do: nil
 
   defp stop_child(child) do
     Process.demonitor(child.ref, [:flush])

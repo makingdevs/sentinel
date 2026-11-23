@@ -14,9 +14,13 @@ defmodule Sentinel.VisitorCounting.Supervisor do
     ]
 
     children =
-      if Sentinel.VisitorCounting.config(:start_manager, true),
-        do: children ++ [Sentinel.VisitorCounting.Manager, Sentinel.VisitorCounting.Retention],
-        else: children
+      cond do
+        Sentinel.VisitorCounting.config(:start_manager, true) ->
+          children ++ [Sentinel.VisitorCounting.Manager, Sentinel.VisitorCounting.Retention]
+
+        true ->
+          children
+      end
 
     Supervisor.init(children, strategy: :rest_for_one)
   end
