@@ -68,6 +68,20 @@ defmodule Sentinel.VisitorCounting.TrackerTest do
     assert length(ids) == 100
   end
 
+  test "a full tracker updates existing associations and rejects new tracks" do
+    rule = %Rule{}
+
+    {state, [id]} =
+      Tracker.update(%{Tracker.new() | max_tracks: 1}, [person(0.2, 0.3)], {1000, 1000}, rule)
+
+    {state, [^id]} =
+      Tracker.update(state, [person(0.21, 0.32), person(0.9, 0.8)], {1000, 1000}, rule)
+
+    assert map_size(state.tracks) == 1
+    assert state.tracks[id].hits == 2
+    assert state.tracks[id].object == person(0.21, 0.32)
+  end
+
   test "annotated capture encodes as readable JPEG" do
     frame = %{width: 160, height: 100, payload: :binary.copy(<<0>>, 160 * 100 * 3)}
     object = %{class_idx: 0, prob: 0.9, bbox: %{cx: 80, cy: 50, w: 40, h: 60}}

@@ -27,11 +27,13 @@ defmodule Sentinel.VisitorCounting.Crossing do
           {%{state | point: track.point, armed?: state.armed? or far?}, nil}
 
         true ->
-          valid? = state.armed? and intersects?(state.point, track.point, rule)
-          number = state.number + if(valid?, do: 1, else: 0)
-
-          event =
-            if valid?, do: %{direction: direction(side, rule), crossing_number: number}, else: nil
+          {number, event} =
+            crossing_event(
+              state.armed? and intersects?(state.point, track.point, rule),
+              state.number,
+              side,
+              rule
+            )
 
           {%{state | side: side, point: track.point, armed?: false, number: number}, event}
       end
@@ -39,10 +41,15 @@ defmodule Sentinel.VisitorCounting.Crossing do
     {%{track | crossing: state}, event}
   end
 
-  defp direction(side, rule) do
-    positive? = side == 1
-    if positive? == (rule.entry_direction == "positive"), do: "entry", else: "exit"
-  end
+  defp crossing_event(false, number, _side, _rule), do: {number, nil}
+
+  defp crossing_event(true, number, side, rule),
+    do: {number + 1, %{direction: direction(side, rule), crossing_number: number + 1}}
+
+  defp direction(1, %{entry_direction: "positive"}), do: "entry"
+  defp direction(1, _rule), do: "exit"
+  defp direction(_side, %{entry_direction: "positive"}), do: "exit"
+  defp direction(_side, _rule), do: "entry"
 
   defp distance({x, y}, r) do
     dx = r.x2 - r.x1

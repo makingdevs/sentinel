@@ -20,8 +20,21 @@ defmodule Sentinel.VisitorCounting.Tracker do
       end)
       |> Enum.with_index()
 
+    matches = associate(state.tracks, detections)
+    tracks = age_tracks(state.tracks, rule.max_missed)
+
+    {tracks, next_id, observed} =
+      Enum.reduce(detections, {tracks, state.next_id, []}, fn {detection, index}, acc ->
+        id = Map.get(matches, index, elem(acc, 1))
+        observe(Map.get(state.tracks, id), detection, id, state.max_tracks, acc)
+      end)
+
+    {%{state | tracks: tracks, next_id: next_id}, Enum.reverse(observed)}
+  end
+
+  defp associate(tracks, detections) do
     candidates =
-      for {id, track} <- state.tracks,
+      for {id, track} <- tracks,
           {detection, index} <- detections,
           cost = cost(track, detection),
           cost < 1.0,
@@ -30,54 +43,51 @@ defmodule Sentinel.VisitorCounting.Tracker do
     {matches, _, _} =
       candidates
       |> Enum.sort()
-      |> Enum.reduce(
-        {%{}, MapSet.new(), MapSet.new()},
-        fn {_cost, id, index}, {matches, ids, indices} = acc ->
-          if MapSet.member?(ids, id) or MapSet.member?(indices, index),
-            do: acc,
-            else: {Map.put(matches, index, id), MapSet.put(ids, id), MapSet.put(indices, index)}
-        end
-      )
+      |> Enum.reduce({%{}, MapSet.new(), MapSet.new()}, &match_candidate/2)
 
-    tracks =
-      state.tracks
-      |> Enum.flat_map(fn {id, track} ->
-        if track.missed < rule.max_missed,
-          do: [{id, %{track | missed: track.missed + 1, hits: 0}}],
-          else: []
-      end)
-      |> Map.new()
-
-    {tracks, next_id, observed} =
-      Enum.reduce(detections, {tracks, state.next_id, []}, fn {detection, index},
-                                                              {tracks, next_id, observed} ->
-        id = Map.get(matches, index, next_id)
-        previous = Map.get(state.tracks, id)
-
-        if previous != nil or map_size(tracks) < state.max_tracks do
-          point = {detection.bbox.cx, detection.bbox.cy + detection.bbox.h / 2}
-          velocity = if previous, do: delta(point, previous.point), else: {0, 0}
-
-          track = %{
-            id: id,
-            bbox: detection.bbox,
-            point: point,
-            velocity: velocity,
-            confidence: detection.confidence,
-            object: detection.object,
-            missed: 0,
-            hits: if(previous, do: previous.hits + 1, else: 1),
-            crossing: if(previous, do: previous.crossing, else: nil)
-          }
-
-          {Map.put(tracks, id, track), max(next_id, id + 1), [id | observed]}
-        else
-          {tracks, next_id, observed}
-        end
-      end)
-
-    {%{state | tracks: tracks, next_id: next_id}, Enum.reverse(observed)}
+    matches
   end
+
+  defp match_candidate({_cost, id, index}, {matches, ids, indices} = acc) do
+    cond do
+      MapSet.member?(ids, id) or MapSet.member?(indices, index) -> acc
+      true -> {Map.put(matches, index, id), MapSet.put(ids, id), MapSet.put(indices, index)}
+    end
+  end
+
+  defp age_tracks(tracks, max_missed) do
+    for {id, track} <- tracks,
+        track.missed < max_missed,
+        into: %{},
+        do: {id, %{track | missed: track.missed + 1, hits: 0}}
+  end
+
+  defp observe(nil, _detection, _id, limit, {tracks, _next_id, _observed} = acc)
+       when map_size(tracks) >= limit, do: acc
+
+  defp observe(previous, detection, id, _limit, {tracks, next_id, observed}) do
+    point = {detection.bbox.cx, detection.bbox.cy + detection.bbox.h / 2}
+    {velocity, hits, crossing} = track_history(previous, point)
+
+    track = %{
+      id: id,
+      bbox: detection.bbox,
+      point: point,
+      velocity: velocity,
+      confidence: detection.confidence,
+      object: detection.object,
+      missed: 0,
+      hits: hits,
+      crossing: crossing
+    }
+
+    {Map.put(tracks, id, track), max(next_id, id + 1), [id | observed]}
+  end
+
+  defp track_history(nil, _point), do: {{0, 0}, 1, nil}
+
+  defp track_history(previous, point),
+    do: {delta(point, previous.point), previous.hits + 1, previous.crossing}
 
   defp delta({x, y}, {px, py}), do: {x - px, y - py}
 
@@ -87,7 +97,11 @@ defmodule Sentinel.VisitorCounting.Tracker do
     b = detection.bbox
     distance = :math.sqrt((predicted.cx - b.cx) ** 2 + (predicted.cy - b.cy) ** 2)
     overlap = iou(predicted, b)
-    if distance <= 0.15 or overlap >= 0.1, do: distance * 3 + (1 - overlap) * 0.4, else: 2.0
+
+    cond do
+      distance <= 0.15 or overlap >= 0.1 -> distance * 3 + (1 - overlap) * 0.4
+      true -> 2.0
+    end
   end
 
   defp iou(a, b) do

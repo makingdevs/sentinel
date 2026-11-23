@@ -9,28 +9,28 @@ defmodule Sentinel.VisitorCounting.Processor do
       {track, crossing} = Crossing.step(Map.fetch!(tracker.tracks, id), rule)
       tracker = %{tracker | tracks: Map.put(tracker.tracks, id, track)}
 
-      if crossing do
-        identity = {rule.camera_id, rule.revision, session, id, crossing.crossing_number}
-
-        key =
-          :crypto.hash(:sha256, :erlang.term_to_binary(identity)) |> Base.encode16(case: :lower)
-
-        attrs =
-          Map.merge(crossing, %{
-            camera_id: rule.camera_id,
-            rule_revision: rule.revision,
-            tracking_session_id: session,
-            track_id: id,
-            confidence: track.confidence,
-            bbox: track.bbox,
-            crossed_at: frame.crossed_at,
-            dedupe_key: key
-          })
-
-        {tracker, [%{attrs: attrs, frame: frame, object: track.object} | events]}
-      else
-        {tracker, events}
-      end
+      {tracker, add_event(events, crossing, track, frame, rule, session)}
     end)
+  end
+
+  defp add_event(events, nil, _track, _frame, _rule, _session), do: events
+
+  defp add_event(events, crossing, track, frame, rule, session) do
+    identity = {rule.camera_id, rule.revision, session, track.id, crossing.crossing_number}
+    key = :crypto.hash(:sha256, :erlang.term_to_binary(identity)) |> Base.encode16(case: :lower)
+
+    attrs =
+      Map.merge(crossing, %{
+        camera_id: rule.camera_id,
+        rule_revision: rule.revision,
+        tracking_session_id: session,
+        track_id: track.id,
+        confidence: track.confidence,
+        bbox: track.bbox,
+        crossed_at: frame.crossed_at,
+        dedupe_key: key
+      })
+
+    [%{attrs: attrs, frame: frame, object: track.object} | events]
   end
 end
