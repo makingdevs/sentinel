@@ -97,9 +97,13 @@ defmodule Sentinel.VisitorCounting.SnapshotSource do
           |> Enum.filter(&(now - &1.received_mono <= 3_000))
           |> Enum.take(6)
           |> Enum.reduce({[], 0}, fn frame, {frames, bytes} ->
-            if bytes + byte_size(frame.jpeg) <= 12 * 1024 * 1024,
-              do: {frames ++ [frame], bytes + byte_size(frame.jpeg)},
-              else: {frames, bytes}
+            cond do
+              bytes + byte_size(frame.jpeg) <= 12 * 1024 * 1024 ->
+                {frames ++ [frame], bytes + byte_size(frame.jpeg)}
+
+              true ->
+                {frames, bytes}
+            end
           end)
 
         {frames, bytes} = frames
@@ -143,12 +147,14 @@ defmodule Sentinel.VisitorCounting.SnapshotSource do
     )
 
     state =
-      if state.pipeline != nil and now - state.last_progress > 130_000 do
-        Process.demonitor(state.monitor, [:flush])
-        state.runner.stop(state.pipeline)
-        retry(%{state | pipeline: nil, monitor: nil})
-      else
-        state
+      cond do
+        state.pipeline != nil and now - state.last_progress > 130_000 ->
+          Process.demonitor(state.monitor, [:flush])
+          state.runner.stop(state.pipeline)
+          retry(%{state | pipeline: nil, monitor: nil})
+
+        true ->
+          state
       end
 
     {:noreply, state}
@@ -206,7 +212,11 @@ defmodule Sentinel.VisitorCounting.SnapshotSource do
 
   @impl true
   def terminate(_, state) do
-    if state.pipeline, do: state.runner.stop(state.pipeline)
+    cond do
+      state.pipeline -> state.runner.stop(state.pipeline)
+      true -> nil
+    end
+
     :ok
   catch
     :exit, _ -> :ok

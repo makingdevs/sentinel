@@ -57,10 +57,14 @@ defmodule Sentinel.VisitorCounting.SnapshotSelector do
             {:error, "future"}
 
           image ->
-            if frame.captured_at - image.received_mono <= 750 and
-                 System.monotonic_time(:millisecond) - image.received_mono <= 3_000,
-               do: {:ok, image},
-               else: {:error, "stale"}
+            cond do
+              frame.captured_at - image.received_mono <= 750 and
+                  System.monotonic_time(:millisecond) - image.received_mono <= 3000 ->
+                {:ok, image}
+
+              true ->
+                {:error, "stale"}
+            end
         end
     end
   end

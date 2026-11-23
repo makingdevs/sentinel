@@ -61,7 +61,11 @@ defmodule Sentinel.VisitorCounting do
   def event_by_key(key), do: Repo.get_by(PassageEvent, dedupe_key: key)
 
   def list_events(filters \\ %{}, page \\ 1) do
-    page = if is_integer(page), do: max(1, min(page, 10_000)), else: 1
+    page =
+      cond do
+        is_integer(page) -> max(1, min(page, 10000))
+        true -> 1
+      end
 
     filters
     |> event_query()

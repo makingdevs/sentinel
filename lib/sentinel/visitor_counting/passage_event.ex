@@ -64,10 +64,12 @@ defmodule Sentinel.VisitorCounting.PassageEvent do
     reason = get_field(changeset, :snapshot_fallback_reason)
 
     changeset =
-      if quality do
-        validate_required(changeset, [:snapshot_received_at, :snapshot_width, :snapshot_height])
-      else
-        changeset
+      cond do
+        quality ->
+          validate_required(changeset, [:snapshot_received_at, :snapshot_width, :snapshot_height])
+
+        true ->
+          changeset
       end
 
     cond do

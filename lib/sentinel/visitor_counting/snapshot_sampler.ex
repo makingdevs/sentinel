@@ -16,10 +16,9 @@ defmodule Sentinel.VisitorCounting.SnapshotSampler do
   def handle_stream_format(:input, format, _, state) do
     valid? = format.width in 1..3840 and format.height in 1..2160
 
-    if valid? do
-      {[stream_format: {:output, format}], %{state | next_at: nil, valid?: true}}
-    else
-      {[notify_parent: {:snapshot_error, :oversized}], %{state | valid?: false}}
+    cond do
+      valid? -> {[stream_format: {:output, format}], %{state | next_at: nil, valid?: true}}
+      true -> {[notify_parent: {:snapshot_error, :oversized}], %{state | valid?: false}}
     end
   end
 
@@ -27,17 +26,19 @@ defmodule Sentinel.VisitorCounting.SnapshotSampler do
   def handle_buffer(:input, buffer, ctx, state) do
     now = System.monotonic_time(:millisecond)
 
-    if state.valid? and ctx.pads.output.demand > 0 and
-         (state.next_at == nil or now >= state.next_at) do
-      metadata =
-        Map.merge(buffer.metadata, %{
-          snapshot_received_mono: now,
-          snapshot_received_at: DateTime.utc_now()
-        })
+    cond do
+      state.valid? and ctx.pads.output.demand > 0 and
+          (state.next_at == nil or now >= state.next_at) ->
+        metadata =
+          Map.merge(buffer.metadata, %{
+            snapshot_received_mono: now,
+            snapshot_received_at: DateTime.utc_now()
+          })
 
-      {[buffer: {:output, %{buffer | metadata: metadata}}], %{state | next_at: now + 500}}
-    else
-      {[], state}
+        {[buffer: {:output, %{buffer | metadata: metadata}}], %{state | next_at: now + 500}}
+
+      true ->
+        {[], state}
     end
   end
 

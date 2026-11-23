@@ -27,8 +27,13 @@ defmodule Sentinel.VisitorCounting.Retention do
   def prune(opts \\ []) do
     days = Keyword.get(opts, :days, VisitorCounting.config(:retention_days, 7))
 
-    if not is_integer(days) or days < 1 or days > 365,
-      do: raise(ArgumentError, "retention must be 1..365 days")
+    cond do
+      not is_integer(days) or days < 1 or days > 365 ->
+        raise(ArgumentError, "retention must be 1..365 days")
+
+      true ->
+        nil
+    end
 
     cutoff = DateTime.add(Keyword.get(opts, :now, DateTime.utc_now()), -days * 86_400)
 
@@ -38,30 +43,33 @@ defmodule Sentinel.VisitorCounting.Retention do
         order_by: [asc: e.crossed_at, asc: e.id],
         limit: 100
 
-    if Keyword.get(opts, :dry_run, true) do
-      %{dry_run: true, candidates: Repo.all(query), deleted: 0, file_errors: []}
-    else
-      {:ok, keys} =
-        Repo.transaction(fn ->
-          events = Repo.all(from e in query, lock: "FOR UPDATE SKIP LOCKED")
-          ids = Enum.map(events, & &1.id)
-          Repo.delete_all(from e in PassageEvent, where: e.id in ^ids)
-          Enum.map(events, & &1.snapshot_key)
-        end)
+    cond do
+      Keyword.get(opts, :dry_run, true) ->
+        %{dry_run: true, candidates: Repo.all(query), deleted: 0, file_errors: []}
 
-      if keys != [] do
-        Phoenix.PubSub.broadcast(Sentinel.PubSub, "visitor_events", :passages_pruned)
-      end
+      true ->
+        {:ok, keys} =
+          Repo.transaction(fn ->
+            events = Repo.all(from(e in query, lock: "FOR UPDATE SKIP LOCKED"))
+            ids = Enum.map(events, & &1.id)
+            Repo.delete_all(from(e in PassageEvent, where: e.id in ^ids))
+            Enum.map(events, & &1.snapshot_key)
+          end)
 
-      errors =
-        Enum.flat_map(keys, fn key ->
-          case Snapshots.delete(key) do
-            :ok -> []
-            {:error, reason} -> [{key, reason}]
-          end
-        end)
+        case keys do
+          [] -> nil
+          _ -> Phoenix.PubSub.broadcast(Sentinel.PubSub, "visitor_events", :passages_pruned)
+        end
 
-      %{dry_run: false, deleted: length(keys), file_errors: errors}
+        errors =
+          Enum.flat_map(keys, fn key ->
+            case Snapshots.delete(key) do
+              :ok -> []
+              {:error, reason} -> [{key, reason}]
+            end
+          end)
+
+        %{dry_run: false, deleted: length(keys), file_errors: errors}
     end
   rescue
     error in [Postgrex.Error, DBConnection.ConnectionError] -> {:error, error.__struct__}

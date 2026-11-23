@@ -19,7 +19,11 @@ defmodule Sentinel.VisitorCounting.Persistence do
             with :ok <- Snapshots.write(key, jpeg),
                  {:ok, event, status} <-
                    VisitorCounting.create_event(Map.put(attrs, :snapshot_key, key)) do
-              if status == :existing, do: Snapshots.delete(key)
+              case status do
+                :existing -> Snapshots.delete(key)
+                _ -> nil
+              end
+
               {event, status}
             else
               {:error, reason} -> Repo.rollback(reason)

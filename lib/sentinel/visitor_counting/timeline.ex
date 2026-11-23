@@ -170,11 +170,14 @@ defmodule Sentinel.VisitorCounting.Timeline do
 
   defp selection({:group, id, %DateTime{} = start_at, %DateTime{} = end_at})
        when is_integer(id) and id > 0 and id <= 9_223_372_036_854_775_807 do
-    if DateTime.compare(start_at, end_at) != :gt,
-      do:
+    case DateTime.compare(start_at, end_at) do
+      :gt ->
+        {:error, :invalid_selection}
+
+      _ ->
         {:ok, "g.anchor_id = $5 AND n.image_at >= $6 AND n.image_at <= $7",
-         [id, DateTime.to_naive(start_at), DateTime.to_naive(end_at)]},
-      else: {:error, :invalid_selection}
+         [id, DateTime.to_naive(start_at), DateTime.to_naive(end_at)]}
+    end
   end
 
   defp selection(nil), do: {:ok, "true", []}
@@ -192,11 +195,18 @@ defmodule Sentinel.VisitorCounting.Timeline do
       camera = Map.get(filters, "camera_id")
       direction = Map.get(filters, "direction")
 
-      if (is_nil(camera) or is_binary(camera)) and direction in [nil, "", "entry", "exit"] do
-        {:ok,
-         [DateTime.to_naive(start_at), DateTime.to_naive(end_at), blank(camera), blank(direction)]}
-      else
-        {:error, :invalid_filters}
+      cond do
+        (is_nil(camera) or is_binary(camera)) and direction in [nil, "", "entry", "exit"] ->
+          {:ok,
+           [
+             DateTime.to_naive(start_at),
+             DateTime.to_naive(end_at),
+             blank(camera),
+             blank(direction)
+           ]}
+
+        true ->
+          {:error, :invalid_filters}
       end
     end
   end

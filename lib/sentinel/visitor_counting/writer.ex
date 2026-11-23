@@ -17,14 +17,16 @@ defmodule Sentinel.VisitorCounting.Writer do
         :ets.insert_new(@table, {{:job, slot}, token, event, 0, :selecting})
       end)
 
-    if slot do
-      event = Sentinel.VisitorCounting.SnapshotSelector.freeze(event)
-      :ets.insert(@table, {{:job, slot}, token, event, 0, :ready})
-      send(__MODULE__, :drain)
-      :ok
-    else
-      metric(event.attrs.camera_id, :dropped)
-      {:error, :saturated}
+    cond do
+      slot ->
+        event = Sentinel.VisitorCounting.SnapshotSelector.freeze(event)
+        :ets.insert(@table, {{:job, slot}, token, event, 0, :ready})
+        send(__MODULE__, :drain)
+        :ok
+
+      true ->
+        metric(event.attrs.camera_id, :dropped)
+        {:error, :saturated}
     end
   rescue
     ArgumentError ->
@@ -85,34 +87,40 @@ defmodule Sentinel.VisitorCounting.Writer do
           {:ok, saved, inserted?} ->
             :ets.delete(@table, key)
 
-            if inserted? == :inserted do
-              metric(event.attrs.camera_id, :saved)
+            case inserted? do
+              :inserted ->
+                metric(event.attrs.camera_id, :saved)
 
-              Phoenix.PubSub.broadcast(
-                Sentinel.PubSub,
-                "visitor_events",
-                {:passage_saved, saved.id}
-              )
+                Phoenix.PubSub.broadcast(
+                  Sentinel.PubSub,
+                  "visitor_events",
+                  {:passage_saved, saved.id}
+                )
+
+              _ ->
+                nil
             end
 
           {:error, _reason} ->
             metric(event.attrs.camera_id, :failures)
 
-            if attempt < 2 do
-              :ets.insert(@table, {key, token, event, attempt + 1, :waiting})
+            cond do
+              attempt < 2 ->
+                :ets.insert(@table, {key, token, event, attempt + 1, :waiting})
 
-              Process.send_after(
-                self(),
-                {:retry, key, token},
-                state.retry_ms * Integer.pow(2, attempt)
-              )
-            else
-              :ets.delete(@table, key)
-              metric(event.attrs.camera_id, :dropped)
+                Process.send_after(
+                  self(),
+                  {:retry, key, token},
+                  state.retry_ms * Integer.pow(2, attempt)
+                )
 
-              Logger.warning("Visitor snapshot discarded after three failed writes",
-                camera_id: event.attrs.camera_id
-              )
+              true ->
+                :ets.delete(@table, key)
+                metric(event.attrs.camera_id, :dropped)
+
+                Logger.warning("Visitor snapshot discarded after three failed writes",
+                  camera_id: event.attrs.camera_id
+                )
             end
         end
 

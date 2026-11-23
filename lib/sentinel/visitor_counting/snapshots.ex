@@ -62,7 +62,11 @@ defmodule Sentinel.VisitorCounting.Snapshots do
 
       _ ->
         parent = Path.dirname(path)
-        if parent == path, do: :ok, else: no_symlinks(parent)
+
+        cond do
+          parent == path -> :ok
+          true -> no_symlinks(parent)
+        end
     end
   end
 end

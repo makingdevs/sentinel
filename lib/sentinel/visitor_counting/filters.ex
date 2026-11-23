@@ -21,18 +21,23 @@ defmodule Sentinel.VisitorCounting.Filters do
     |> validate_inclusion(:mode, ["daily", "range"])
     |> validate_inclusion(:direction, ["", "entry", "exit"])
     |> validate_change(:camera_id, fn :camera_id, id ->
-      if id == "" or Enum.any?(Sentinel.Monitoring.list_cameras(), &(&1.id == id)),
-        do: [],
-        else: [camera_id: "es inválida"]
+      cond do
+        id == "" or Enum.any?(Sentinel.Monitoring.list_cameras(), &(&1.id == id)) -> []
+        true -> [camera_id: "es inválida"]
+      end
     end)
     |> validate_range()
   end
 
   defp validate_range(changeset) do
-    if changeset.valid? and
-         Date.compare(get_field(changeset, :from), get_field(changeset, :until)) == :gt,
-       do: add_error(changeset, :until, "debe ser posterior al inicio"),
-       else: changeset
+    cond do
+      changeset.valid? and
+          Date.compare(get_field(changeset, :from), get_field(changeset, :until)) == :gt ->
+        add_error(changeset, :until, "debe ser posterior al inicio")
+
+      true ->
+        changeset
+    end
   end
 
   def query(filters) do
