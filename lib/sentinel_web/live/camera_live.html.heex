@@ -1,34 +1,23 @@
 <Layouts.app flash={@flash} current_scope={@current_scope} wide>
-  <header class="mb-10 flex flex-wrap items-center justify-between gap-5 border-b border-white/10 pb-6">
-    <.link
-      navigate={~p"/cameras"}
-      class="flex items-center gap-3"
-      aria-label="Sentinel · Cámaras"
-    >
-      <span class="flex size-11 items-center justify-center rounded-xl bg-teal-400/10 text-teal-300 ring-1 ring-teal-300/20">
-        <.icon name="hero-viewfinder-circle" class="size-7" />
+  <.section_header id="camera-heading" section="Monitoreo de sucursales" title="Cámaras">
+    <:actions>
+      <span class="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-400">
+        División &amp; La Virgen
       </span>
-      <span>
-        <span class="block text-lg font-semibold tracking-tight">Sentinel</span>
-        <span class="block text-xs tracking-wide text-slate-400">MONITOREO DE SUCURSALES</span>
-      </span>
-    </.link>
-    <span class="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-400">
-      División &amp; La Virgen
-    </span>
-    <.link
-      :if={@visitor_access?}
-      id="visitor-history"
-      href={~p"/visitors"}
-      class="rounded-lg px-4 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
-    >Historial de cruces</.link>
-    <.link
-      :if={@visitor_access?}
-      id="camera-catalog"
-      navigate={~p"/cameras/catalog"}
-      class="rounded-lg px-4 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
-    >Administrar canales</.link>
-  </header>
+      <.link
+        :if={@visitor_access?}
+        id="visitor-history"
+        href={~p"/visitors"}
+        class="rounded-lg px-4 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
+      >Historial de cruces</.link>
+      <.link
+        :if={@visitor_access?}
+        id="camera-catalog"
+        navigate={~p"/cameras/catalog"}
+        class="rounded-lg px-4 py-2 text-sm text-teal-300 transition hover:bg-teal-300/10"
+      >Administrar canales</.link>
+    </:actions>
+  </.section_header>
 
   <section aria-labelledby="camera-heading">
     <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
@@ -36,9 +25,6 @@
         <p class="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-teal-300">
           Tu espacio de observación
         </p>
-        <h1 id="camera-heading" class="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Cámaras
-        </h1>
         <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
           Elige qué ver. Comienza en calidad secundaria y ajusta cada cámara cuando necesites más detalle.
         </p>

@@ -8,22 +8,7 @@ defmodule SentinelWeb.CoreComponents do
   with doc strings and declarative assigns. You may customize and style
   them in any way you want, based on your application growth and needs.
 
-  The foundation for styling is Tailwind CSS, a utility-first CSS framework,
-  augmented with daisyUI, a Tailwind CSS plugin that provides UI components
-  and themes. Here are useful references:
-
-    * [daisyUI](https://daisyui.com/docs/intro/) - a good place to get
-      started and see the available components.
-
-    * [Tailwind CSS](https://tailwindcss.com) - the foundational framework
-      we build on. You will use it for layout, sizing, flexbox, grid, and
-      spacing.
-
-    * [Heroicons](https://heroicons.com) - see `icon/1` for usage.
-
-    * [Phoenix.Component](https://phoenix-live-view.hexdocs.pm/Phoenix.Component.html) -
-      the component system used by Phoenix. Some components, such as `<.link>`
-      and `<.form>`, are defined there.
+  Components use Tailwind utilities and the Sentinel dark palette.
 
   """
   use Phoenix.Component
@@ -78,13 +63,13 @@ defmodule SentinelWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="max-w-full"
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "flex w-80 max-w-full items-start gap-3 rounded-xl border bg-slate-900 p-4 text-sm shadow-xl",
+        @kind == :info && "border-teal-300/30 text-teal-100",
+        @kind == :error && "border-rose-400/40 text-rose-200"
       ]}>
         <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
         <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
@@ -116,11 +101,17 @@ defmodule SentinelWeb.CoreComponents do
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    variants = %{
+      "primary" => "bg-teal-300 text-slate-950 hover:bg-teal-200",
+      nil => "border border-white/10 bg-slate-900 text-teal-300 hover:bg-slate-800"
+    }
 
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        [
+          "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 phx-click-loading:opacity-50 phx-submit-loading:opacity-50",
+          Map.fetch!(variants, assigns[:variant])
+        ]
       end)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
@@ -227,7 +218,7 @@ defmodule SentinelWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="min-w-0 mb-2">
       <label for={@id}>
         <input
           type="hidden"
@@ -236,14 +227,14 @@ defmodule SentinelWeb.CoreComponents do
           disabled={@rest[:disabled]}
           form={@rest[:form]}
         />
-        <span class="label">
+        <span class="inline-flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
             id={@id}
             name={@name}
             value="true"
             checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
+            class={@class || "size-4 rounded border border-slate-600 bg-slate-950 accent-teal-300"}
             {@rest}
           />{@label}
         </span>
@@ -255,13 +246,18 @@ defmodule SentinelWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="min-w-0 mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="mb-2 block text-sm font-medium text-slate-300">{@label}</span>
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[
+            @class ||
+              "block w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-teal-300 focus:ring-2 focus:ring-teal-300/20 disabled:opacity-40 read-only:text-slate-400",
+            @errors != [] && (@error_class || "border-rose-400 ring-1 ring-rose-400/30")
+          ]}
+          aria-invalid={@errors != [] && "true"}
           multiple={@multiple}
           {@rest}
         >
@@ -276,15 +272,17 @@ defmodule SentinelWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="min-w-0 mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="mb-2 block text-sm font-medium text-slate-300">{@label}</span>
         <textarea
+          aria-invalid={@errors != [] && "true"}
           id={@id}
           name={@name}
           class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
+            @class ||
+              "block w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-teal-300 focus:ring-2 focus:ring-teal-300/20 disabled:opacity-40 read-only:text-slate-400",
+            @errors != [] && (@error_class || "border-rose-400 ring-1 ring-rose-400/30")
           ]}
           {@rest}
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
@@ -297,17 +295,19 @@ defmodule SentinelWeb.CoreComponents do
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="min-w-0 mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="mb-2 block text-sm font-medium text-slate-300">{@label}</span>
         <input
+          aria-invalid={@errors != [] && "true"}
           type={@type}
           name={@name}
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, @value)}
           class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
+            @class ||
+              "block w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-teal-300 focus:ring-2 focus:ring-teal-300/20 disabled:opacity-40 read-only:text-slate-400",
+            @errors != [] && (@error_class || "border-rose-400 ring-1 ring-rose-400/30")
           ]}
           {@rest}
         />
@@ -320,10 +320,34 @@ defmodule SentinelWeb.CoreComponents do
   # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
+    <p class="mt-1.5 flex gap-2 items-center text-sm text-rose-300">
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :section, :string, required: true
+  attr :title, :string, required: true
+  slot :actions
+
+  def section_header(assigns) do
+    ~H"""
+    <header class="mb-8 flex flex-wrap items-center justify-between gap-5 border-b border-white/10 pb-6">
+      <div class="min-w-0">
+        <.link
+          navigate="/"
+          class="text-xs uppercase tracking-[0.2em] text-teal-300 hover:text-teal-100"
+        >
+          Sentinel · {@section}
+        </.link>
+        <h1 id={@id} class="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{@title}</h1>
+      </div>
+      <div :if={@actions != []} class="flex flex-wrap items-center gap-3">
+        {render_slot(@actions)}
+      </div>
+    </header>
     """
   end
 
@@ -341,7 +365,7 @@ defmodule SentinelWeb.CoreComponents do
         <h1 class="text-lg font-semibold leading-8">
           {render_slot(@inner_block)}
         </h1>
-        <p :if={@subtitle != []} class="text-sm text-base-content/70">
+        <p :if={@subtitle != []} class="text-sm text-slate-400">
           {render_slot(@subtitle)}
         </p>
       </div>
@@ -382,7 +406,7 @@ defmodule SentinelWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
+    <table class="w-full text-left text-sm [&_th]:p-3 [&_th]:text-slate-400 [&_td]:p-3 [&_tr]:border-b [&_tr]:border-white/10">
       <thead>
         <tr>
           <th :for={col <- @col}>{col[:label]}</th>
@@ -429,9 +453,9 @@ defmodule SentinelWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <ul class="list">
-      <li :for={item <- @item} class="list-row">
-        <div class="list-col-grow">
+    <ul class="divide-y divide-white/10">
+      <li :for={item <- @item} class="py-4">
+        <div class="min-w-0">
           <div class="font-bold">{item.title}</div>
           <div>{render_slot(item)}</div>
         </div>

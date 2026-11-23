@@ -11,6 +11,20 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
   import Phoenix.LiveViewTest
   alias Sentinel.VisitorCounting
 
+  test "mode navigation marks only the selected mode", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/visitors?mode=range")
+    assert has_element?(view, "#visitor-mode-range[aria-current=page]")
+    refute has_element?(view, "#visitor-mode-daily[aria-current]")
+
+    view |> element("#visitor-mode-daily") |> render_click()
+    assert has_element?(view, "#visitor-mode-daily[aria-current=page]")
+    refute has_element?(view, "#visitor-mode-range[aria-current]")
+
+    view |> element("#visitor-mode-range") |> render_click()
+    assert has_element?(view, "#visitor-mode-range[aria-current=page]")
+    refute has_element?(view, "#visitor-mode-daily[aria-current]")
+  end
+
   test "filters and totals come from DB, page changes bound the stream", %{conn: conn} do
     for i <- 1..25, do: event("entry", "division-1", i)
     exit = event("exit", "division-2", 26)

@@ -1,20 +1,18 @@
 <Layouts.app flash={@flash} current_scope={@current_scope} wide>
-  <header class="mb-9 flex items-center justify-between border-b border-white/10 pb-6">
-    <div>
-      <p class="text-xs uppercase tracking-[0.2em] text-teal-300">Sentinel · Historial</p>
-      <h1 class="mt-2 text-3xl font-semibold tracking-tight">Cruces de personas</h1>
-    </div>
-    <.link
-      id="back-cameras"
-      navigate={~p"/cameras"}
-      class="rounded-lg border border-white/10 px-4 py-2 text-sm transition hover:bg-white/5"
-    >Ver cámaras</.link>
-    <.link
-      id="catalog-from-history"
-      navigate={~p"/cameras/catalog"}
-      class="rounded-lg px-3 py-2 text-sm text-teal-200"
-    >Administrar canales</.link>
-  </header>
+  <.section_header id="history-heading" section="Historial" title="Cruces de personas">
+    <:actions>
+      <.link
+        id="back-cameras"
+        navigate={~p"/cameras"}
+        class="rounded-lg border border-white/10 px-4 py-2 text-sm transition hover:bg-white/5"
+      >Ver cámaras</.link>
+      <.link
+        id="catalog-from-history"
+        navigate={~p"/cameras/catalog"}
+        class="rounded-lg px-3 py-2 text-sm text-teal-200"
+      >Administrar canales</.link>
+    </:actions>
+  </.section_header>
   <p class="mb-6 max-w-3xl text-sm leading-6 text-slate-400">
     Cada registro representa un cruce, no una persona única. Fechas y horas de Ciudad de México (CST). Los totales incluyen solo los eventos guardados; revisa las pérdidas en la configuración de cada cámara.
   </p>
@@ -46,18 +44,18 @@
     <.snapshot_provenance event={@event} detail />
     <p class="mt-3 text-sm text-slate-400">Confianza: {round(@event.confidence * 100)}%</p>
   </section>
-  <nav class="mb-5 flex gap-2" aria-label="Modo del historial">
+  <nav class="mb-5 flex flex-wrap gap-2" aria-label="Modo del historial">
     <.link
       id="visitor-mode-daily"
       patch={mode_path(@url_params, "daily")}
       aria-current={if @filters.mode == "daily", do: "page"}
-      class="rounded-lg border border-teal-300/30 px-4 py-2 text-sm text-teal-200 transition hover:bg-teal-300/10"
+      class="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 aria-[current=page]:border-teal-300/50 aria-[current=page]:bg-teal-300/10 aria-[current=page]:text-teal-200"
     >Actividad diaria</.link>
     <.link
       id="visitor-mode-range"
       patch={mode_path(@url_params, "range")}
       aria-current={if @filters.mode == "range", do: "page"}
-      class="rounded-lg border border-white/10 px-4 py-2 text-sm transition hover:bg-white/5"
+      class="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 aria-[current=page]:border-teal-300/50 aria-[current=page]:bg-teal-300/10 aria-[current=page]:text-teal-200"
     >Rango de fechas</.link>
   </nav>
   <.form

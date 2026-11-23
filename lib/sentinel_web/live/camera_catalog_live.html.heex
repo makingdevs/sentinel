@@ -1,12 +1,18 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
-  <main class="mx-auto max-w-5xl px-5 py-10">
-    <header class="mb-8 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p class="text-sm text-teal-300">Sentinel · Configuración local</p>
-        <h1 class="mt-2 text-3xl font-semibold">Catálogo de canales</h1>
-      </div>
-      <.link navigate={~p"/cameras"} class="text-sm text-teal-200">Volver a cámaras</.link>
-    </header>
+  <div>
+    <.section_header
+      id="catalog-heading"
+      section="Configuración local"
+      title="Catálogo de canales"
+    >
+      <:actions>
+        <.link
+          id="catalog-back-cameras"
+          navigate={~p"/cameras"}
+          class="rounded-lg px-4 py-2 text-sm text-teal-300 hover:bg-teal-300/10"
+        >Volver a cámaras</.link>
+      </:actions>
+    </.section_header>
 
     <.form
       for={@form}
@@ -39,9 +45,11 @@
         autocomplete="new-password"
         label="RTSP secundaria (vacío conserva el valor)"
       />
-      <div class="sm:col-span-2 flex gap-3">
+      <div class="sm:col-span-2 flex flex-wrap gap-3">
         <button
           id="save-camera"
+          type="submit"
+          phx-disable-with="Guardando…"
           class="rounded-lg bg-teal-300 px-4 py-2 font-medium text-slate-950"
         >Guardar canal</button>
         <button
@@ -59,7 +67,7 @@
         id={"catalog-camera-#{entry.camera.id}"}
         class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900 p-4"
       >
-        <div class="flex items-center gap-3">
+        <div class="flex min-w-0 items-center gap-3 break-words">
           <div>
             <p class="font-medium">
               <.channel_label color={entry.camera.color}>
@@ -106,5 +114,5 @@
         </div>
       </article>
     </section>
-  </main>
+  </div>
 </Layouts.app>
