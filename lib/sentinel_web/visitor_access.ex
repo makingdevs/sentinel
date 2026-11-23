@@ -7,9 +7,10 @@ defmodule SentinelWeb.VisitorAccess do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    if allowed?(conn.remote_ip),
-      do: conn,
-      else: conn |> send_resp(403, "Visitor history is restricted to localhost") |> halt()
+    case allowed?(conn.remote_ip) do
+      true -> conn
+      false -> conn |> send_resp(403, "Visitor history is restricted to localhost") |> halt()
+    end
   end
 
   def allowed?({127, _, _, _}), do: true
@@ -24,8 +25,9 @@ defmodule SentinelWeb.VisitorAccess do
   end
 
   def on_mount(:local, _params, _session, socket) do
-    if socket_allowed?(socket),
-      do: {:cont, assign(socket, :visitor_access?, true)},
-      else: {:halt, redirect(socket, to: "/cameras")}
+    case socket_allowed?(socket) do
+      true -> {:cont, assign(socket, :visitor_access?, true)}
+      false -> {:halt, redirect(socket, to: "/cameras")}
+    end
   end
 end

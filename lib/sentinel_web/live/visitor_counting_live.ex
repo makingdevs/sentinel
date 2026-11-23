@@ -7,14 +7,15 @@ defmodule SentinelWeb.VisitorCountingLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
-      Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
-      Process.send_after(self(), :retention_refresh, 60_000)
-    end
+    subscribe(connected?(socket))
 
     changeset = Filters.changeset(%{})
-    cameras = if connected?(socket), do: Sentinel.Monitoring.camera_options(), else: []
+
+    cameras =
+      cond do
+        connected?(socket) -> Sentinel.Monitoring.camera_options()
+        true -> []
+      end
 
     {:ok,
      socket
@@ -47,6 +48,14 @@ defmodule SentinelWeb.VisitorCountingLive do
      |> stream(:events, [])}
   end
 
+  defp subscribe(false), do: :ok
+
+  defp subscribe(true) do
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
+    Process.send_after(self(), :retention_refresh, 60_000)
+  end
+
   @impl true
   def handle_params(params, _uri, socket) do
     changeset = Filters.changeset(Map.take(params, @filter_keys))
@@ -65,7 +74,11 @@ defmodule SentinelWeb.VisitorCountingLive do
             group_page: page(params["group_page"])
           )
 
-        {:noreply, if(connected?(socket), do: refresh(socket), else: socket)}
+        {:noreply,
+         cond do
+           connected?(socket) -> refresh(socket)
+           true -> socket
+         end}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :filters))}
@@ -92,7 +105,11 @@ defmodule SentinelWeb.VisitorCountingLive do
       end)
 
     base = "#{bin_time(bin.id)} CST: #{bin.count} imágenes"
-    if channel_counts == "", do: base, else: base <> ". " <> channel_counts
+
+    case channel_counts do
+      "" -> base
+      _ -> base <> ". " <> channel_counts
+    end
   end
 
   @impl true
@@ -116,13 +133,22 @@ defmodule SentinelWeb.VisitorCountingLive do
 
   def handle_event("page", %{"direction" => direction}, socket)
       when direction in ~w(next previous) do
-    delta = if direction == "next", do: 1, else: -1
+    delta =
+      case direction do
+        "next" -> 1
+        _ -> -1
+      end
+
     {:noreply, patch(socket, %{"page" => to_string(page(socket.assigns.page + delta))})}
   end
 
   def handle_event("group_page", %{"direction" => direction}, socket)
       when direction in ~w(next previous) do
-    delta = if direction == "next", do: 1, else: -1
+    delta =
+      case direction do
+        "next" -> 1
+        _ -> -1
+      end
 
     {:noreply,
      patch(socket, %{"group_page" => to_string(page(socket.assigns.group_page + delta))})}
@@ -300,13 +326,16 @@ defmodule SentinelWeb.VisitorCountingLive do
       |> stream(:groups, activity.groups, reset: true)
 
     socket =
-      if data.params != socket.assigns.url_params,
-        do:
+      cond do
+        data.params != socket.assigns.url_params ->
           push_patch(socket,
             to: history_path(data.params, socket.assigns.event_id),
             replace: true
-          ),
-        else: socket
+          )
+
+        true ->
+          socket
+      end
 
     {:noreply, socket}
   end
@@ -337,7 +366,12 @@ defmodule SentinelWeb.VisitorCountingLive do
   defp page(_), do: 1
 
   defp history_path(params, event_id \\ nil) do
-    base = if event_id, do: "/visitors/events/#{event_id}", else: "/visitors"
+    base =
+      cond do
+        event_id -> "/visitors/events/#{event_id}"
+        true -> "/visitors"
+      end
+
     base <> "?" <> URI.encode_query(Map.filter(params, fn {_, value} -> is_binary(value) end))
   end
 
@@ -366,15 +400,12 @@ defmodule SentinelWeb.VisitorCountingLive do
   defp snapshot_provenance(assigns) do
     ~H"""
     <div
-      id={"snapshot-provenance-#{if @detail, do: "detail", else: "card"}-#{@event.id}"}
+      id={"snapshot-provenance-#{snapshot_location(@detail)}-#{@event.id}"}
       class="mt-3 text-xs leading-5 text-slate-400"
     >
       <span class={[
         "inline-flex rounded-md border px-2 py-0.5 font-medium",
-        if(@event.snapshot_quality == "primary",
-          do: "border-teal-300/30 text-teal-200",
-          else: "border-slate-600 text-slate-300"
-        )
+        snapshot_class(@event.snapshot_quality)
       ]}>
         {case @event.snapshot_quality do
           "primary" -> "Primaria · cuadro completo"
@@ -400,6 +431,19 @@ defmodule SentinelWeb.VisitorCountingLive do
     </div>
     """
   end
+
+  defp current_mode(mode, mode), do: "page"
+  defp current_mode(_mode, _other), do: nil
+  defp bin_color(0), do: "bg-slate-700"
+  defp bin_color(_count), do: "bg-teal-300"
+  defp group_class(true), do: "border-teal-300 bg-teal-300/10"
+  defp group_class(false), do: "border-white/10"
+  defp direction_label("entry"), do: "Entrada"
+  defp direction_label(_direction), do: "Salida"
+  defp snapshot_location(true), do: "detail"
+  defp snapshot_location(false), do: "card"
+  defp snapshot_class("primary"), do: "border-teal-300/30 text-teal-200"
+  defp snapshot_class(_quality), do: "border-slate-600 text-slate-300"
 
   defp fallback_label(reason) do
     Map.get(

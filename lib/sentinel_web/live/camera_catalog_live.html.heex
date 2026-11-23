@@ -22,7 +22,7 @@
       class="mb-10 grid gap-4 rounded-2xl border border-white/10 bg-slate-900 p-6 sm:grid-cols-2"
     >
       <h2 class="sm:col-span-2 text-lg font-semibold">
-        {if @editing_id, do: "Editar canal", else: "Nuevo canal"}
+        {editor_title(@editing_id)}
       </h2>
       <.input field={@form[:id]} label="ID estable" readonly={!!@editing_id} />
       <.input field={@form[:branch]} id="catalog-camera-branch" label="Sucursal" />
@@ -76,16 +76,13 @@
             </p>
             <p class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span class={counting_badge_class(entry)}>{counting_text(entry)}</span>
-              <span>Última captura {if entry.last_capture,
-                do: Sentinel.LocalTime.format(entry.last_capture) <> " CST",
-                else: "Sin captura persistida"}</span>
+              <span>Última captura {last_capture_text(entry.last_capture)}</span>
             </p>
             <p class="text-sm text-slate-400">
-              {entry.camera.branch} · Principal {if "principal" in entry.sources,
-                do: "configurada",
-                else: "ausente"} · Secundaria {if "secundaria" in entry.sources,
-                do: "configurada",
-                else: "ausente"}
+              {entry.camera.branch} · Principal {source_text(entry.sources, "principal")} · Secundaria {source_text(
+                entry.sources,
+                "secundaria"
+              )}
             </p>
           </div>
           <span :if={entry.camera.archived_at} class="text-xs text-amber-300">Archivada</span>

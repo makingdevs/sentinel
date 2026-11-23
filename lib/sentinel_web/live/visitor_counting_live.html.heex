@@ -48,13 +48,13 @@
     <.link
       id="visitor-mode-daily"
       patch={mode_path(@url_params, "daily")}
-      aria-current={if @filters.mode == "daily", do: "page"}
+      aria-current={current_mode(@filters.mode, "daily")}
       class="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 aria-[current=page]:border-teal-300/50 aria-[current=page]:bg-teal-300/10 aria-[current=page]:text-teal-200"
     >Actividad diaria</.link>
     <.link
       id="visitor-mode-range"
       patch={mode_path(@url_params, "range")}
-      aria-current={if @filters.mode == "range", do: "page"}
+      aria-current={current_mode(@filters.mode, "range")}
       class="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 aria-[current=page]:border-teal-300/50 aria-[current=page]:bg-teal-300/10 aria-[current=page]:text-teal-200"
     >Rango de fechas</.link>
   </nav>
@@ -189,7 +189,7 @@
           style={"height: #{max(4, div(bin.count * 100, @peak))}%"}
           class={[
             "min-h-1 rounded-t-sm transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-200",
-            if(bin.count == 0, do: "bg-slate-700", else: "bg-teal-300"),
+            bin_color(bin.count),
             selected_bin?(@selection, bin.id) && "ring-2 ring-white"
           ]}
         >
@@ -240,10 +240,7 @@
           aria-pressed={to_string(selected_group?(@selection, group.id))}
           class={[
             "w-full rounded-xl border p-3 text-left transition hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-teal-200",
-            if(selected_group?(@selection, group.id),
-              do: "border-teal-300 bg-teal-300/10",
-              else: "border-white/10"
-            )
+            group_class(selected_group?(@selection, group.id))
           ]}
         >
           <span class="block text-sm font-medium text-teal-200">
@@ -305,7 +302,7 @@
             <.channel_label color={get_in(@camera_metadata, [event.camera_id, :color])}>
               {get_in(@camera_metadata, [event.camera_id, :label]) || event.camera_id}
             </.channel_label>
-            · {if event.direction == "entry", do: "Entrada", else: "Salida"}
+            · {direction_label(event.direction)}
           </p><p class="mt-2 text-sm">{Sentinel.LocalTime.format(event.crossed_at)} CST</p><p class="mt-1 text-xs text-slate-500">
             Confianza {round(event.confidence * 100)}%
           </p>

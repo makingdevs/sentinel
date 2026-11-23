@@ -114,18 +114,20 @@ defmodule SentinelWeb.CoreComponents do
         ]
       end)
 
-    if rest[:href] || rest[:navigate] || rest[:patch] do
-      ~H"""
-      <.link class={@class} {@rest}>
-        {render_slot(@inner_block)}
-      </.link>
-      """
-    else
-      ~H"""
-      <button class={@class} {@rest}>
-        {render_slot(@inner_block)}
-      </button>
-      """
+    cond do
+      rest[:href] || rest[:navigate] || rest[:patch] ->
+        ~H"""
+        <.link class={@class} {@rest}>
+          {render_slot(@inner_block)}
+        </.link>
+        """
+
+      true ->
+        ~H"""
+        <button class={@class} {@rest}>
+          {render_slot(@inner_block)}
+        </button>
+        """
     end
   end
 
@@ -195,12 +197,21 @@ defmodule SentinelWeb.CoreComponents do
                 multiple pattern placeholder readonly required rows size step)
 
   def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
-    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+    errors =
+      cond do
+        Phoenix.Component.used_input?(field) -> field.errors
+        true -> []
+      end
 
     assigns
     |> assign(field: nil, id: assigns.id || field.id)
     |> assign(:errors, Enum.map(errors, &translate_error(&1)))
-    |> assign_new(:name, fn -> if assigns.multiple, do: field.name <> "[]", else: field.name end)
+    |> assign_new(:name, fn ->
+      cond do
+        assigns.multiple -> field.name <> "[]"
+        true -> field.name
+      end
+    end)
     |> assign_new(:value, fn -> field.value end)
     |> input()
   end
@@ -528,10 +539,12 @@ defmodule SentinelWeb.CoreComponents do
     # dynamically, so we need to translate them by calling Gettext
     # with our gettext backend as first argument. Translations are
     # available in the errors.po file (as we use the "errors" domain).
-    if count = opts[:count] do
-      Gettext.dngettext(SentinelWeb.Gettext, "errors", msg, msg, count, opts)
-    else
-      Gettext.dgettext(SentinelWeb.Gettext, "errors", msg, opts)
+    case opts[:count] do
+      count when count not in [nil, false] ->
+        Gettext.dngettext(SentinelWeb.Gettext, "errors", msg, msg, count, opts)
+
+      _ ->
+        Gettext.dgettext(SentinelWeb.Gettext, "errors", msg, opts)
     end
   end
 

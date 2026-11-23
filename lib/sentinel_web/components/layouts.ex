@@ -40,7 +40,7 @@ defmodule SentinelWeb.Layouts do
     <main class="min-h-screen bg-slate-950 text-slate-100">
       <div class={[
         "mx-auto min-w-0 px-4 py-6 sm:px-8 lg:py-10",
-        if(@wide, do: "max-w-[1800px]", else: "max-w-5xl")
+        content_width(@wide)
       ]}>
         {render_slot(@inner_block)}
       </div>
@@ -103,4 +103,6 @@ defmodule SentinelWeb.Layouts do
     """
   end
 
+  defp content_width(true), do: "max-w-[1800px]"
+  defp content_width(false), do: "max-w-5xl"
 end

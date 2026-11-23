@@ -121,11 +121,7 @@
             phx-hook="HlsPlayer"
             phx-update="ignore"
             data-source={camera.url}
-            data-status-url={
-              if(camera.engine != "off",
-                do: "/hls/#{camera.id}/#{camera.quality}/#{camera.engine}/status"
-              )
-            }
+            data-status-url={detector_status_url(camera)}
             class="relative aspect-video bg-black"
           >
             <span

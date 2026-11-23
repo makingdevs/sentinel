@@ -8,20 +8,15 @@ defmodule SentinelWeb.CameraLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket) and SentinelWeb.VisitorAccess.socket_allowed?(socket) do
-      Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_status")
-      Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
-      Process.send_after(self(), :counting_status, 2_000)
-    else
-      if connected?(socket), do: Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
-    end
+    visitor_access? = SentinelWeb.VisitorAccess.socket_allowed?(socket)
+    subscribe(connected?(socket), visitor_access?)
 
     {:ok,
      socket
      |> assign(
        page_title: "Cámaras",
        current_scope: nil,
-       visitor_access?: SentinelWeb.VisitorAccess.socket_allowed?(socket),
+       visitor_access?: visitor_access?,
        selected: %{},
        camera_count: 0,
        camera_options: Monitoring.camera_options(),
@@ -188,16 +183,26 @@ defmodule SentinelWeb.CameraLive do
   def handle_info(:counting_status, socket) do
     Process.send_after(self(), :counting_status, 2_000)
 
-    if socket.assigns.visitor_access? do
-      for {id, _card} <- socket.assigns.selected, do: refresh_counting(id)
+    cond do
+      socket.assigns.visitor_access? ->
+        for {id, _card} <- socket.assigns.selected do
+          refresh_counting(id)
+        end
+
+      true ->
+        nil
     end
 
     {:noreply, socket}
   end
 
   def handle_info({:visitor_status, id, _status}, socket) do
-    if socket.assigns.visitor_access? and Map.has_key?(socket.assigns.selected, id) do
-      refresh_counting(id)
+    cond do
+      socket.assigns.visitor_access? and Map.has_key?(socket.assigns.selected, id) ->
+        refresh_counting(id)
+
+      true ->
+        nil
     end
 
     {:noreply, socket}
@@ -222,6 +227,16 @@ defmodule SentinelWeb.CameraLive do
     {:noreply, socket}
   end
 
+  defp subscribe(false, _visitor_access?), do: :ok
+
+  defp subscribe(true, true) do
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_status")
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
+    Process.send_after(self(), :counting_status, 2_000)
+  end
+
+  defp subscribe(true, false), do: Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
+
   defp refresh_counting(id) do
     send_update(CountingStatusComponent, id: "counting-indicators-#{id}", camera_id: id)
   end
@@ -239,13 +254,18 @@ defmodule SentinelWeb.CameraLive do
   defp update_player(socket, id, quality, retry?) do
     with {:ok, card} <- Map.fetch(socket.assigns.selected, id),
          {:ok, url} <- Monitoring.player_url(id, quality, card.engine) do
-      if retry? and card.engine != "off", do: Monitoring.retry_detector(id, quality, card.engine)
+      cond do
+        retry? and card.engine != "off" -> Monitoring.retry_detector(id, quality, card.engine)
+        true -> nil
+      end
 
-      if retry? or card.quality != quality do
-        card = %{card | quality: quality, url: url, generation: card.generation + 1}
-        {:noreply, put_card(socket, card)}
-      else
-        {:noreply, socket}
+      cond do
+        retry? or card.quality != quality ->
+          card = %{card | quality: quality, url: url, generation: card.generation + 1}
+          {:noreply, put_card(socket, card)}
+
+        true ->
+          {:noreply, socket}
       end
     else
       _ -> {:noreply, camera_error(socket)}
@@ -253,14 +273,22 @@ defmodule SentinelWeb.CameraLive do
   end
 
   defp put_card(socket, card) do
-    card = Map.put(card, :form, to_form(%{"value" => card.quality}, as: :quality))
-    card = Map.put(card, :detection_form, to_form(%{"engine" => card.engine}, as: :detection))
+    card =
+      card
+      |> Map.put(:form, to_form(%{"value" => card.quality}, as: :quality))
+      |> Map.put(:detection_form, to_form(%{"engine" => card.engine}, as: :detection))
+
     selected = Map.put(socket.assigns.selected, card.id, card)
 
     socket
     |> assign(selected: selected, camera_count: map_size(selected))
     |> stream_insert(:cameras, card)
   end
+
+  defp detector_status_url(%{engine: "off"}), do: nil
+
+  defp detector_status_url(camera),
+    do: "/hls/#{camera.id}/#{camera.quality}/#{camera.engine}/status"
 
   defp camera_error(socket) do
     put_flash(

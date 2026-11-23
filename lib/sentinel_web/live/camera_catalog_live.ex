@@ -6,12 +6,7 @@ defmodule SentinelWeb.CameraCatalogLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_status")
-      Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
-      Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
-      Process.send_after(self(), :refresh_catalog, 15_000)
-    end
+    subscribe(connected?(socket))
 
     {:ok,
      socket
@@ -21,6 +16,15 @@ defmodule SentinelWeb.CameraCatalogLive do
      |> assign(:form, camera_form(%Camera{}))
      |> assign(:editing_id, nil)
      |> assign(:cameras, Monitoring.admin_cameras())}
+  end
+
+  defp subscribe(false), do: :ok
+
+  defp subscribe(true) do
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_status")
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
+    Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
+    Process.send_after(self(), :refresh_catalog, 15_000)
   end
 
   @impl true
@@ -51,9 +55,10 @@ defmodule SentinelWeb.CameraCatalogLive do
 
   def handle_event("validate", %{"camera" => attrs}, socket) do
     camera =
-      if socket.assigns.editing_id,
-        do: Monitoring.get_camera(socket.assigns.editing_id),
-        else: %Camera{}
+      cond do
+        socket.assigns.editing_id -> Monitoring.get_camera(socket.assigns.editing_id)
+        true -> %Camera{}
+      end
 
     changeset = Camera.changeset(camera, attrs) |> Map.put(:action, :validate)
     {:noreply, assign(socket, :form, to_form(changeset, as: :camera))}
@@ -95,6 +100,18 @@ defmodule SentinelWeb.CameraCatalogLive do
     case Monitoring.restore_camera(id) do
       {:ok, _} -> {:noreply, assign(socket, :cameras, Monitoring.admin_cameras())}
       _ -> {:noreply, put_flash(socket, :error, "No se pudo restaurar el canal.")}
+    end
+  end
+
+  defp editor_title(nil), do: "Nuevo canal"
+  defp editor_title(_id), do: "Editar canal"
+  defp last_capture_text(nil), do: "Sin captura persistida"
+  defp last_capture_text(time), do: Sentinel.LocalTime.format(time) <> " CST"
+
+  defp source_text(sources, quality) do
+    case quality in sources do
+      true -> "configurada"
+      false -> "ausente"
     end
   end
 
