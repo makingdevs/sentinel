@@ -24,12 +24,20 @@ defmodule Sentinel.Detection.Drawer do
   def render(payload, [], state), do: {payload, %{state | objects: [], overlay: nil}}
 
   def render(payload, objects, state) do
-    overlay = if state.objects == objects, do: state.overlay, else: overlay(objects, state.format)
+    overlay =
+      cond do
+        state.objects == objects -> state.overlay
+        true -> overlay(objects, state.format)
+      end
+
     {:ok, image} = Membrane.RawVideo.payload_to_image(payload, state.format)
     image = image |> Image.compose!(overlay, x: 0, y: 0) |> Image.split_alpha() |> elem(0)
     {:ok, output, _format} = Membrane.RawVideo.image_to_payload(image)
     {output, %{state | objects: objects, overlay: overlay}}
   end
+
+  defp class_style(class) when class == 0, do: {"#5eead4", "Persona"}
+  defp class_style(_class), do: {"#fbbf24", "Auto"}
 
   defp overlay(objects, format) do
     drawings =
@@ -37,8 +45,9 @@ defmodule Sentinel.Detection.Drawer do
         %{cx: cx, cy: cy, w: w, h: h} = object.bbox
         x = max(0, round(cx - w / 2))
         y = max(0, round(cy - h / 2))
-        color = if object.class_idx == 0, do: "#5eead4", else: "#fbbf24"
-        label = if object.class_idx == 0, do: "Persona", else: "Auto"
+
+        {color, label} = class_style(object.class_idx)
+
         text = "#{label} #{round(object.prob * 100)}%"
         label_width = min(format.width, 12 + String.length(text) * 7)
         label_x = min(x, format.width - label_width)

@@ -5,8 +5,8 @@ defmodule Sentinel.Detection do
   def engines, do: @engines
   def valid_engine?(engine), do: engine in @engines
 
-  def validate_engine(engine),
-    do: if(valid_engine?(engine), do: :ok, else: {:error, :unknown_engine})
+  def validate_engine(engine) when engine in @engines, do: :ok
+  def validate_engine(_engine), do: {:error, :unknown_engine}
 
   def config, do: Application.get_env(:sentinel, :detection, [])
   def get(key, default), do: Keyword.get(config(), key, default)
@@ -40,22 +40,28 @@ defmodule Sentinel.Detection do
     right = min(max(round(x2), 0), w)
     bottom = min(max(round(y2), 0), h)
 
-    if right > left and bottom > top do
-      [
-        %{
-          class_idx: class,
-          class: if(class == 0, do: "Persona", else: "Auto"),
-          prob: prob,
-          bbox: %{
-            cx: (left + right) / 2,
-            cy: (top + bottom) / 2,
-            w: right - left,
-            h: bottom - top
+    cond do
+      right > left and bottom > top ->
+        [
+          %{
+            class_idx: class,
+            class:
+              cond do
+                class == 0 -> "Persona"
+                true -> "Auto"
+              end,
+            prob: prob,
+            bbox: %{
+              cx: (left + right) / 2,
+              cy: (top + bottom) / 2,
+              w: right - left,
+              h: bottom - top
+            }
           }
-        }
-      ]
-    else
-      []
+        ]
+
+      true ->
+        []
     end
   end
 

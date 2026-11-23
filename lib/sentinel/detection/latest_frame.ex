@@ -25,17 +25,20 @@ defmodule Sentinel.Detection.LatestFrame do
 
   @impl true
   def handle_buffer(:input, buffer, ctx, state) do
-    if state.pending != nil do
-      :telemetry.execute([:sentinel, :detection, :video_drop], %{frames: 1}, %{
-        engine: state.engine,
-        generation: state.generation
-      })
+    case state.pending do
+      nil ->
+        nil
+
+      _ ->
+        :telemetry.execute([:sentinel, :detection, :video_drop], %{frames: 1}, %{
+          engine: state.engine,
+          generation: state.generation
+        })
     end
 
-    if ctx.pads.output.demand > 0 do
-      {[buffer: {:output, buffer}], %{state | pending: nil}}
-    else
-      {[], %{state | pending: buffer}}
+    cond do
+      ctx.pads.output.demand > 0 -> {[buffer: {:output, buffer}], %{state | pending: nil}}
+      true -> {[], %{state | pending: buffer}}
     end
   end
 

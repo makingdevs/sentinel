@@ -33,25 +33,31 @@ defmodule Sentinel.Detection.Python do
     header = Jason.encode!(Map.take(frame, [:width, :height, :frame_id]))
     payload = <<byte_size(header)::32, header::binary, frame.payload::binary>>
 
-    if byte_size(payload) <= @max_packet do
-      Port.command(port, payload)
+    cond do
+      byte_size(payload) <= @max_packet ->
+        Port.command(port, payload)
 
-      case receive_json(port, Detection.get(:timeout_ms, 10_000)) do
-        {:ok, %{"frame_id" => id, "objects" => objects}}
-        when id == frame.frame_id and is_list(objects) ->
-          {:ok, objects}
+        case receive_json(port, Detection.get(:timeout_ms, 10000)) do
+          {:ok, %{"frame_id" => id, "objects" => objects}}
+          when id == frame.frame_id and is_list(objects) ->
+            {:ok, objects}
 
-        _ ->
-          {:error, :python_inference_failed}
-      end
-    else
-      {:error, :oversize_frame}
+          _ ->
+            {:error, :python_inference_failed}
+        end
+
+      true ->
+        {:error, :oversize_frame}
     end
   end
 
   @impl true
   def close(port) do
-    if Port.info(port), do: Port.close(port)
+    case Port.info(port) do
+      nil -> nil
+      _info -> Port.close(port)
+    end
+
     :ok
   end
 
