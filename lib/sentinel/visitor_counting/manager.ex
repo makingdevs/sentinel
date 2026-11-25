@@ -75,7 +75,21 @@ defmodule Sentinel.VisitorCounting.Manager do
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
-    children = Map.reject(state.children, fn {_id, child} -> child.pid == pid end)
+    children =
+      Map.reject(state.children, fn {id, child} ->
+        if child.pid == pid do
+          Phoenix.PubSub.broadcast(
+            Sentinel.PubSub,
+            "visitor_status",
+            {:visitor_status, id, :loading}
+          )
+
+          true
+        else
+          false
+        end
+      end)
+
     {:noreply, reconcile(%{state | children: children})}
   end
 

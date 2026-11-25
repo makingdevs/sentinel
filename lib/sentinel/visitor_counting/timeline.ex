@@ -10,6 +10,7 @@ defmodule Sentinel.VisitorCounting.Timeline do
     AND COALESCE(snapshot_received_at, crossed_at) < $2
     AND ($3::text IS NULL OR camera_id = $3)
     AND ($4::text IS NULL OR direction = $4)
+    AND ($5::text[] IS NULL OR camera_id = ANY($5))
   """
   @groups """
   WITH filtered AS (
@@ -52,14 +53,14 @@ defmodule Sentinel.VisitorCounting.Timeline do
              SELECT floor(extract(epoch FROM (image_at - $1)) / 300)::integer AS bin, camera_id, count(*)
              FROM filtered GROUP BY bin, camera_id ORDER BY bin, camera_id
              """,
-             params
+             List.replace_at(params, 2, nil)
            ),
          {:ok, result} <-
            Repo.query(
              @groups <>
                """
                SELECT camera_id, started_at, ended_at, image_count, anchor_id, count(*) OVER ()
-               FROM groups ORDER BY started_at, camera_id, anchor_id LIMIT 24 OFFSET $5
+               FROM groups ORDER BY started_at, camera_id, anchor_id LIMIT 24 OFFSET $6
                """,
              params ++ [offset(page)]
            ),
@@ -68,10 +69,18 @@ defmodule Sentinel.VisitorCounting.Timeline do
              @groups <> "SELECT count(*), COALESCE(sum(image_count), 0)::bigint FROM groups",
              params
            ) do
-      camera_counts = Enum.group_by(density.rows, fn [bin, _camera, _count] -> bin end)
+      camera_ids = density.rows |> Enum.map(fn [_, id, _] -> id end) |> Enum.uniq()
+      selected_camera = Enum.at(params, 2)
+
+      rows =
+        Enum.filter(density.rows, fn [_, id, _] ->
+          is_nil(selected_camera) or id == selected_camera
+        end)
+
+      camera_counts = Enum.group_by(rows, fn [bin, _camera, _count] -> bin end)
 
       counts =
-        Enum.reduce(density.rows, %{}, fn [bin, _camera, count], acc ->
+        Enum.reduce(rows, %{}, fn [bin, _camera, count], acc ->
           Map.update(acc, bin, count, &(&1 + count))
         end)
 
@@ -99,6 +108,7 @@ defmodule Sentinel.VisitorCounting.Timeline do
 
              %{id: bin, count: Map.get(counts, bin, 0), cameras: cameras}
            end,
+         camera_ids: camera_ids,
          groups: groups,
          group_count: group_count,
          image_count: image_count,
@@ -113,7 +123,7 @@ defmodule Sentinel.VisitorCounting.Timeline do
     with {:ok, params} <- params(day, filters),
          {:ok, result} <-
            Repo.query(
-             @groups <> "SELECT camera_id, started_at, ended_at FROM groups WHERE anchor_id = $5",
+             @groups <> "SELECT camera_id, started_at, ended_at FROM groups WHERE anchor_id = $6",
              params ++ [id]
            ) do
       case result.rows do
@@ -141,6 +151,17 @@ defmodule Sentinel.VisitorCounting.Timeline do
   end
 
   def images(day, filters \\ %{}, selection \\ nil, page \\ 1) do
+    query_images(day, filters, selection, page, @page_size)
+  end
+
+  def images_page(day, filters, selection, page) do
+    with {:ok, images} <- query_images(day, filters, selection, page, @page_size + 1) do
+      {events, rest} = Enum.split(images, @page_size)
+      {:ok, events, rest != []}
+    end
+  end
+
+  defp query_images(day, filters, selection, page, limit) do
     with {:ok, params} <- params(day, filters),
          {:ok, predicate, selection_params} <- selection(selection),
          {:ok, result} <-
@@ -151,12 +172,12 @@ defmodule Sentinel.VisitorCounting.Timeline do
                  SELECT n.id, n.image_at FROM numbered n JOIN groups g
                    ON n.camera_id = g.camera_id AND n.group_number = g.group_number
                  WHERE #{predicate}
-                 ORDER BY n.image_at, n.id LIMIT 24 OFFSET $#{5 + length(selection_params)}
+                 ORDER BY n.image_at, n.id LIMIT $#{6 + length(selection_params)} OFFSET $#{7 + length(selection_params)}
                )
                SELECT e.* FROM page JOIN passage_events e ON e.id = page.id
                ORDER BY page.image_at, page.id
                """,
-             params ++ selection_params ++ [offset(page)]
+             params ++ selection_params ++ [limit, offset(page)]
            ) do
       events =
         Enum.map(
@@ -170,23 +191,20 @@ defmodule Sentinel.VisitorCounting.Timeline do
 
   defp selection({:group, id, %DateTime{} = start_at, %DateTime{} = end_at})
        when is_integer(id) and id > 0 and id <= 9_223_372_036_854_775_807 do
-    case DateTime.compare(start_at, end_at) do
-      :gt ->
-        {:error, :invalid_selection}
-
-      _ ->
-        {:ok, "g.anchor_id = $5 AND n.image_at >= $6 AND n.image_at <= $7",
-         [id, DateTime.to_naive(start_at), DateTime.to_naive(end_at)]}
-    end
+    if DateTime.compare(start_at, end_at) != :gt,
+      do:
+        {:ok, "g.anchor_id = $6 AND n.image_at >= $7 AND n.image_at <= $8",
+         [id, DateTime.to_naive(start_at), DateTime.to_naive(end_at)]},
+      else: {:error, :invalid_selection}
   end
 
   defp selection(nil), do: {:ok, "true", []}
 
   defp selection({:group, id}) when is_integer(id) and id > 0 and id <= 9_223_372_036_854_775_807,
-    do: {:ok, "g.anchor_id = $5", [id]}
+    do: {:ok, "g.anchor_id = $6", [id]}
 
   defp selection({:bin, bin}) when is_integer(bin) and bin in 0..287,
-    do: {:ok, "floor(extract(epoch FROM (n.image_at - $1)) / 300)::integer = $5", [bin]}
+    do: {:ok, "floor(extract(epoch FROM (n.image_at - $1)) / 300)::integer = $6", [bin]}
 
   defp selection(_), do: {:error, :invalid_selection}
 
@@ -194,19 +212,20 @@ defmodule Sentinel.VisitorCounting.Timeline do
     with {:ok, {start_at, end_at}} <- bounds(day) do
       camera = Map.get(filters, "camera_id")
       direction = Map.get(filters, "direction")
+      camera_ids = Map.get(filters, "camera_ids")
 
-      cond do
-        (is_nil(camera) or is_binary(camera)) and direction in [nil, "", "entry", "exit"] ->
-          {:ok,
-           [
-             DateTime.to_naive(start_at),
-             DateTime.to_naive(end_at),
-             blank(camera),
-             blank(direction)
-           ]}
-
-        true ->
-          {:error, :invalid_filters}
+      if (is_nil(camera) or is_binary(camera)) and direction in [nil, "", "entry", "exit"] and
+           (is_nil(camera_ids) or (is_list(camera_ids) and Enum.all?(camera_ids, &is_binary/1))) do
+        {:ok,
+         [
+           DateTime.to_naive(start_at),
+           DateTime.to_naive(end_at),
+           blank(camera),
+           blank(direction),
+           camera_ids
+         ]}
+      else
+        {:error, :invalid_filters}
       end
     end
   end

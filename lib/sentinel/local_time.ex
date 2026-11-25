@@ -16,6 +16,32 @@ defmodule Sentinel.LocalTime do
   def format(datetime, pattern \\ "%Y-%m-%d %H:%M:%S"),
     do: datetime |> local_naive() |> Calendar.strftime(pattern)
 
+  def relative(datetime, now) do
+    seconds = max(0, DateTime.diff(now, datetime))
+    days = Date.diff(date(now), date(datetime))
+
+    cond do
+      seconds < 60 -> "hace un momento"
+      seconds < 3600 -> "hace #{div(seconds, 60)} min"
+      days == 1 -> "ayer"
+      days > 1 -> "hace #{days} días"
+      true -> "hace #{div(seconds, 3600)} h"
+    end
+  end
+
+  def duration(from, until) do
+    seconds = DateTime.diff(until, from)
+    hours = div(seconds, 3600)
+    minutes = div(rem(seconds, 3600), 60)
+    remainder = rem(seconds, 60)
+
+    cond do
+      hours > 0 -> "#{hours} h #{minutes} min"
+      minutes > 0 -> "#{minutes} min #{remainder} s"
+      true -> "#{remainder} s"
+    end
+  end
+
   defp local_naive(datetime) do
     datetime
     |> DateTime.shift_zone!("Etc/UTC")

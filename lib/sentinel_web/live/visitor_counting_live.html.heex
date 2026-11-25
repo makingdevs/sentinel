@@ -1,6 +1,10 @@
 <Layouts.app flash={@flash} current_scope={@current_scope} wide>
-  <.section_header id="history-heading" section="Historial" title="Cruces de personas">
-    <:actions>
+  <header class="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-6">
+    <div>
+      <p class="text-xs uppercase tracking-[0.2em] text-teal-300">Sentinel · Historial</p>
+      <h1 class="mt-2 text-3xl font-semibold tracking-tight">Cruces de personas</h1>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
       <.link
         id="back-cameras"
         navigate={~p"/cameras"}
@@ -11,10 +15,10 @@
         navigate={~p"/cameras/catalog"}
         class="rounded-lg px-3 py-2 text-sm text-teal-200"
       >Administrar canales</.link>
-    </:actions>
-  </.section_header>
+    </div>
+  </header>
   <p class="mb-6 max-w-3xl text-sm leading-6 text-slate-400">
-    Cada registro representa un cruce, no una persona única. Fechas y horas de Ciudad de México (CST). Los totales incluyen solo los eventos guardados; revisa las pérdidas en la configuración de cada cámara.
+    Cada registro es un cruce guardado. Consulta las pérdidas en la configuración de la cámara. Horario de Ciudad de México (CST).
   </p>
   <section
     :if={@event}
@@ -44,25 +48,28 @@
     <.snapshot_provenance event={@event} detail />
     <p class="mt-3 text-sm text-slate-400">Confianza: {round(@event.confidence * 100)}%</p>
   </section>
-  <nav class="mb-5 flex flex-wrap gap-2" aria-label="Modo del historial">
+  <nav class="mb-5 flex gap-2" aria-label="Modo del historial">
     <.link
       id="visitor-mode-daily"
       patch={mode_path(@url_params, "daily")}
-      aria-current={current_mode(@filters.mode, "daily")}
-      class="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 aria-[current=page]:border-teal-300/50 aria-[current=page]:bg-teal-300/10 aria-[current=page]:text-teal-200"
+      aria-current={if @filters.mode == "daily", do: "page"}
+      class="rounded-lg border border-teal-300/30 px-4 py-2 text-sm text-teal-200 transition hover:bg-teal-300/10"
     >Actividad diaria</.link>
     <.link
       id="visitor-mode-range"
       patch={mode_path(@url_params, "range")}
-      aria-current={current_mode(@filters.mode, "range")}
-      class="rounded-lg border border-white/10 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 aria-[current=page]:border-teal-300/50 aria-[current=page]:bg-teal-300/10 aria-[current=page]:text-teal-200"
+      aria-current={if @filters.mode == "range", do: "page"}
+      class="rounded-lg border border-white/10 px-4 py-2 text-sm transition hover:bg-white/5"
     >Rango de fechas</.link>
   </nav>
   <.form
     for={@form}
     id="visitor-filters"
     phx-submit="filter"
-    class="mb-7 grid gap-4 rounded-2xl border border-white/10 bg-slate-900 p-5 sm:grid-cols-2 lg:grid-cols-5"
+    class={[
+      "mb-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-slate-900 p-4",
+      if(@filters.mode == "daily", do: "lg:grid-cols-4", else: "lg:grid-cols-5")
+    ]}
   >
     <.input field={@form[:mode]} type="hidden" />
     <.input :if={@filters.mode == "daily"} field={@form[:from]} type="hidden" />
@@ -75,13 +82,15 @@
       label="Día (CST)"
       class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
     />
-    <.input
-      field={@form[:camera_id]}
-      type="select"
-      label="Cámara"
-      options={@camera_options}
-      class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-    />
+    <div class="min-w-0 max-sm:order-1 max-sm:col-span-2">
+      <.input
+        field={@form[:camera_id]}
+        type="select"
+        label="Cámara"
+        options={@camera_options}
+        class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+      />
+    </div>
     <.input
       :if={@filters.mode == "range"}
       field={@form[:from]}
@@ -105,7 +114,7 @@
     />
     <button
       id="apply-visitor-filters"
-      class="self-end rounded-lg bg-teal-300 px-4 py-2 font-medium text-slate-950 transition hover:bg-teal-200"
+      class="self-end rounded-lg bg-teal-300 max-sm:order-2 max-sm:col-span-2 sm:mb-2 px-4 py-2 font-medium text-slate-950 transition hover:bg-teal-200"
       phx-disable-with="Consultando…"
     >Consultar</button>
   </.form>
@@ -119,18 +128,16 @@
       {get_in(@camera_metadata, [@filters.camera_id, :label]) || @filters.camera_id}
     </.channel_label>
   </p>
-  <div class="mb-7 grid grid-cols-2 gap-4">
-    <div id="entry-total" class="rounded-2xl border border-white/10 bg-slate-900 p-5">
-      <p class="text-sm text-slate-400">Entradas guardadas</p><p class="mt-2 text-4xl font-semibold tabular-nums text-teal-300">
-        {@totals.entry}
-      </p>
+  <dl class="mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+    <div id="entry-total" class="flex items-baseline gap-2">
+      <dt class="text-slate-400">Entradas guardadas</dt>
+      <dd class="font-semibold tabular-nums text-teal-300">{@totals.entry}</dd>
     </div>
-    <div id="exit-total" class="rounded-2xl border border-white/10 bg-slate-900 p-5">
-      <p class="text-sm text-slate-400">Salidas guardadas</p><p class="mt-2 text-4xl font-semibold tabular-nums">
-        {@totals.exit}
-      </p>
+    <div id="exit-total" class="flex items-baseline gap-2">
+      <dt class="text-slate-400">Salidas guardadas</dt>
+      <dd class="font-semibold tabular-nums">{@totals.exit}</dd>
     </div>
-  </div>
+  </dl>
   <p :if={@loading?} id="visitor-loading" role="status" class="mb-4 text-sm text-teal-200">
     Consultando actividad…
   </p>
@@ -160,7 +167,9 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="font-semibold">Actividad del {@filters.day}</h2><p class="mt-1 text-xs text-slate-400">
-          {@image_count} imágenes · {@group_count} grupos · intervalos de 5 minutos · CST
+          {image_count_text(@image_count)} · {@group_count} {if @group_count == 1,
+            do: "grupo",
+            else: "grupos"} · intervalos de 5 minutos · CST
         </p>
       </div>
       <button
@@ -173,7 +182,7 @@
     <div class="mt-6 overflow-x-auto pb-2">
       <div
         id="visitor-density"
-        class="grid h-20 min-w-[720px] items-end gap-px"
+        class="grid h-40 min-w-[720px] sm:h-52 items-end gap-px"
         style="grid-template-columns: repeat(288, minmax(0, 1fr))"
         role="group"
         aria-label="Densidad de imágenes cada cinco minutos; también puedes usar la lista de grupos"
@@ -185,11 +194,11 @@
           phx-value-id={bin.id}
           aria-label={bin_description(bin, @camera_metadata)}
           aria-pressed={to_string(selected_bin?(@selection, bin.id))}
-          title={"#{bin_time(bin.id)} · #{bin.count} imágenes"}
-          style={"height: #{max(4, div(bin.count * 100, @peak))}%"}
+          title={bin_description(bin, @camera_metadata)}
+          style={"height: #{bin.count * 100 / @peak}%"}
           class={[
             "min-h-1 rounded-t-sm transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-200",
-            bin_color(bin.count),
+            if(bin.count == 0, do: "bg-slate-700", else: "bg-teal-300"),
             selected_bin?(@selection, bin.id) && "ring-2 ring-white"
           ]}
         >
@@ -199,38 +208,45 @@
           >
             <span
               :for={segment <- bin.cameras}
-              style={"height: #{max(1, div(segment.count * 100, max(bin.count, 1)))}%; background-color: #{channel_color(get_in(@camera_metadata, [segment.camera_id, :color]))}"}
+              style={"height: #{segment.count * 100 / bin.count}%; background-color: #{channel_color(get_in(@camera_metadata, [segment.camera_id, :color]))}"}
             ></span>
           </span>
         </button>
       </div>
-      <ul
-        :if={map_size(@camera_metadata) > 0}
-        id="timeline-camera-legend"
-        class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-400"
-        aria-label="Leyenda de cámaras"
-      >
-        <li :for={{camera_id, metadata} <- @camera_metadata} class="flex items-center gap-2">
-          <.channel_label color={metadata.color}>{metadata.label} · {camera_id}</.channel_label>
-        </li>
-      </ul>
       <div class="mt-2 flex min-w-[720px] justify-between text-[10px] tabular-nums text-slate-500">
         <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00 CST</span>
       </div>
     </div>
+    <ul
+      :if={@legend != []}
+      id="timeline-camera-legend"
+      class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-400"
+      aria-label="Leyenda de cámaras"
+    >
+      <li :for={{camera_id, count} <- @legend} id={"timeline-camera-#{camera_id}"}>
+        <.channel_label color={get_in(@camera_metadata, [camera_id, :color])}>
+          {camera_name(@camera_metadata, camera_id)}
+        </.channel_label>
+        · {image_count_text(count)}
+      </li>
+    </ul>
     <p class="mt-2 text-xs text-slate-500">
       Las franjas grises indican periodos sin imágenes. Un grupo empieza tras más de 120 segundos sin actividad de esa cámara.
     </p>
     <div
       id="visitor-groups"
       phx-update="stream"
-      class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+      class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
     >
       <p
         id="visitor-groups-empty"
         class="col-span-full hidden py-6 text-center text-sm text-slate-500 only:block"
       >
-        No hay grupos en este día.
+        <%= if @filters.camera_id != "" do %>
+          La cámara seleccionada debe estar contando y tener imágenes guardadas para este día y dirección.
+        <% else %>
+          No hay imágenes guardadas de cámaras con conteo activo para este día y dirección.
+        <% end %>
       </p>
       <div :for={{dom_id, group} <- @streams.groups} id={dom_id}>
         <button
@@ -239,19 +255,31 @@
           phx-value-id={group.id}
           aria-pressed={to_string(selected_group?(@selection, group.id))}
           class={[
-            "w-full rounded-xl border p-3 text-left transition hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-teal-200",
-            group_class(selected_group?(@selection, group.id))
+            "h-full w-full rounded-xl border p-4 text-left transition hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-teal-200",
+            if(selected_group?(@selection, group.id),
+              do: "border-teal-300 bg-teal-300/10",
+              else: "border-white/10"
+            )
           ]}
         >
           <span class="block text-sm font-medium text-teal-200">
             <.channel_label color={get_in(@camera_metadata, [group.camera_id, :color])}>
-              {get_in(@camera_metadata, [group.camera_id, :label]) || group.camera_id}
+              {camera_name(@camera_metadata, group.camera_id)}
             </.channel_label>
-            · {group.image_count} imágenes
-          </span><span class="mt-1 block text-xs tabular-nums text-slate-400">{Sentinel.LocalTime.format(
-            group.started_at,
-            "%H:%M:%S"
-          )}–{Sentinel.LocalTime.format(group.ended_at, "%H:%M:%S")} CST</span>
+            · {image_count_text(group.image_count)}
+          </span>
+          <span class="mt-2 block text-xs tabular-nums text-slate-400">
+            <time
+              datetime={DateTime.to_iso8601(group.ended_at)}
+              title={LocalTime.format(group.ended_at) <> " CST"}
+            >
+              {LocalTime.relative(group.ended_at, @now)}
+            </time>
+            <span :if={group.image_count > 1}>· Duración {LocalTime.duration(
+              group.started_at,
+              group.ended_at
+            )}</span>
+          </span>
         </button>
       </div>
     </div>
@@ -283,7 +311,11 @@
       id="passage-empty"
       class="col-span-full hidden rounded-2xl border border-dashed border-slate-700 p-12 text-center text-slate-500 only:block"
     >
-      No hay cruces guardados para este periodo.
+      <%= if @filters.mode == "daily" and @image_count == 0 do %>
+        No hay imágenes de cámaras con conteo activo para los filtros seleccionados.
+      <% else %>
+        No hay cruces guardados para este periodo.
+      <% end %>
     </p>
     <article
       :for={{id, event} <- @streams.events}
@@ -302,11 +334,24 @@
             <.channel_label color={get_in(@camera_metadata, [event.camera_id, :color])}>
               {get_in(@camera_metadata, [event.camera_id, :label]) || event.camera_id}
             </.channel_label>
-            · {direction_label(event.direction)}
-          </p><p class="mt-2 text-sm">{Sentinel.LocalTime.format(event.crossed_at)} CST</p><p class="mt-1 text-xs text-slate-500">
+            · {if event.direction == "entry", do: "Entrada", else: "Salida"}
+          </p>
+          <p class="mt-2 text-sm">
+            <%= if @filters.mode == "daily" do %>
+              <time
+                datetime={DateTime.to_iso8601(image_at(event))}
+                title={LocalTime.format(image_at(event)) <> " CST"}
+              >
+                {LocalTime.relative(image_at(event), @now)}
+              </time>
+            <% else %>
+              {LocalTime.format(event.crossed_at)} CST
+            <% end %>
+          </p>
+          <p class="mt-1 text-xs text-slate-500">
             Confianza {round(event.confidence * 100)}%
           </p>
-          <.snapshot_provenance event={event} />
+          <.snapshot_provenance event={event} relative={@filters.mode == "daily"} />
         </div>
       </.link>
     </article>
@@ -324,7 +369,7 @@
       id="visitor-next"
       phx-click="page"
       phx-value-direction="next"
-      disabled={@count < 24}
+      disabled={!@more_images?}
       class="rounded-lg border border-white/10 px-4 py-2 text-sm transition hover:bg-white/5 disabled:opacity-30"
     >Siguiente</button>
   </nav>

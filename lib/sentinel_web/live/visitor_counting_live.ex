@@ -1,21 +1,21 @@
 defmodule SentinelWeb.VisitorCountingLive do
   use SentinelWeb, :live_view
-  alias Sentinel.VisitorCounting
+  alias Sentinel.{LocalTime, Monitoring, VisitorCounting}
   alias Sentinel.VisitorCounting.{Filters, Timeline}
   @filter_keys ~w(camera_id direction from until mode day)
   @state_keys @filter_keys ++ ~w(page group_page group bin selection_from selection_until)
 
   @impl true
   def mount(_params, _session, socket) do
-    subscribe(connected?(socket))
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
+      Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
+      Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_status")
+      Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_rules")
+      Process.send_after(self(), :retention_refresh, 60_000)
+    end
 
     changeset = Filters.changeset(%{})
-
-    cameras =
-      cond do
-        connected?(socket) -> Sentinel.Monitoring.camera_options()
-        true -> []
-      end
 
     {:ok,
      socket
@@ -25,11 +25,13 @@ defmodule SentinelWeb.VisitorCountingLive do
        filters: Ecto.Changeset.apply_changes(changeset),
        form: to_form(changeset, as: :filters),
        camera_metadata: %{},
-       camera_options: [{"Todas las cámaras", ""} | cameras],
+       camera_options: [{"Todas las cámaras", ""}],
+       legend: [],
+       now: DateTime.utc_now(),
+       more_images?: false,
        page: 1,
        group_page: 1,
        totals: %{entry: 0, exit: 0},
-       count: 0,
        event: nil,
        event_id: nil,
        url_params: %{},
@@ -48,14 +50,6 @@ defmodule SentinelWeb.VisitorCountingLive do
      |> stream(:events, [])}
   end
 
-  defp subscribe(false), do: :ok
-
-  defp subscribe(true) do
-    Phoenix.PubSub.subscribe(Sentinel.PubSub, "visitor_events")
-    Phoenix.PubSub.subscribe(Sentinel.PubSub, "camera_catalog")
-    Process.send_after(self(), :retention_refresh, 60_000)
-  end
-
   @impl true
   def handle_params(params, _uri, socket) do
     changeset = Filters.changeset(Map.take(params, @filter_keys))
@@ -68,31 +62,56 @@ defmodule SentinelWeb.VisitorCountingLive do
             filters: filters,
             form: to_form(changeset, as: :filters),
             url_params: Map.take(params, @state_keys),
-            camera_metadata: camera_metadata(),
+            selection_notice?:
+              socket.assigns.selection_notice? and
+                socket.assigns.url_params == Map.take(params, @state_keys),
             event_id: safe_event_id(params["event_id"]),
             page: page(params["page"]),
             group_page: page(params["group_page"])
           )
 
-        {:noreply,
-         cond do
-           connected?(socket) -> refresh(socket)
-           true -> socket
-         end}
+        {:noreply, if(connected?(socket), do: refresh(socket), else: socket)}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :filters))}
     end
   end
 
-  defp camera_metadata do
-    Sentinel.Monitoring.admin_cameras()
-    |> Map.new(fn entry ->
-      camera = entry.camera
-      {camera.id, %{label: camera.label, branch: camera.branch, color: camera.color}}
+  defp camera_metadata(cameras) do
+    Map.new(cameras, &{&1.id, Map.take(&1, [:label, :branch, :color])})
+  end
+
+  defp camera_name(metadata, id) do
+    case metadata[id] do
+      %{branch: branch, label: label} -> "#{branch} · #{label}"
+      nil -> id
+    end
+  end
+
+  defp camera_options(metadata, ids, selected_id) do
+    options =
+      ids
+      |> Enum.uniq()
+      |> Enum.map(&{camera_name(metadata, &1), &1})
+      |> Enum.sort()
+
+    options =
+      if selected_id != "" and selected_id not in ids,
+        do:
+          options ++
+            [{"#{camera_name(metadata, selected_id)} (sin actividad disponible)", selected_id}],
+        else: options
+
+    [{"Todas las cámaras", ""} | options]
+  end
+
+  defp legend(bins, metadata) do
+    bins
+    |> Enum.flat_map(& &1.cameras)
+    |> Enum.reduce(%{}, fn segment, counts ->
+      Map.update(counts, segment.camera_id, segment.count, &(&1 + segment.count))
     end)
-  rescue
-    _ -> %{}
+    |> Enum.sort_by(fn {id, _count} -> {camera_name(metadata, id), id} end)
   end
 
   def channel_color(color), do: Sentinel.Monitoring.Camera.color_value(color)
@@ -100,17 +119,16 @@ defmodule SentinelWeb.VisitorCountingLive do
   def bin_description(bin, metadata) do
     channel_counts =
       Enum.map_join(bin.cameras, ", ", fn camera ->
-        name = get_in(metadata, [camera.camera_id, :label]) || camera.camera_id
+        name = camera_name(metadata, camera.camera_id)
         "#{name}: #{camera.count}"
       end)
 
-    base = "#{bin_time(bin.id)} CST: #{bin.count} imágenes"
-
-    case channel_counts do
-      "" -> base
-      _ -> base <> ". " <> channel_counts
-    end
+    base = "#{bin_time(bin.id)} CST: #{image_count_text(bin.count)}"
+    if channel_counts == "", do: base, else: base <> ". " <> channel_counts
   end
+
+  defp image_count_text(1), do: "1 imagen"
+  defp image_count_text(count), do: "#{count} imágenes"
 
   @impl true
   def handle_event("filter", %{"filters" => attrs}, socket) do
@@ -133,22 +151,13 @@ defmodule SentinelWeb.VisitorCountingLive do
 
   def handle_event("page", %{"direction" => direction}, socket)
       when direction in ~w(next previous) do
-    delta =
-      case direction do
-        "next" -> 1
-        _ -> -1
-      end
-
+    delta = if direction == "next", do: 1, else: -1
     {:noreply, patch(socket, %{"page" => to_string(page(socket.assigns.page + delta))})}
   end
 
   def handle_event("group_page", %{"direction" => direction}, socket)
       when direction in ~w(next previous) do
-    delta =
-      case direction do
-        "next" -> 1
-        _ -> -1
-      end
+    delta = if direction == "next", do: 1, else: -1
 
     {:noreply,
      patch(socket, %{"group_page" => to_string(page(socket.assigns.group_page + delta))})}
@@ -176,12 +185,15 @@ defmodule SentinelWeb.VisitorCountingLive do
     do: push_patch(socket, to: history_path(Map.merge(socket.assigns.url_params, updates)))
 
   @impl true
-  def handle_info({:camera_changed, _id}, socket) do
-    {:noreply,
-     socket
-     |> assign(:camera_metadata, camera_metadata())
-     |> refresh()}
-  end
+  def handle_info({:camera_changed, _id}, socket), do: {:noreply, refresh(socket)}
+
+  def handle_info({:visitor_status, _id, _status}, socket),
+    do: {:noreply, schedule_refresh(socket)}
+
+  def handle_info({:rule_changed, _id}, socket), do: {:noreply, schedule_refresh(socket)}
+
+  def handle_info({:camera_sources_changed, _id}, socket),
+    do: {:noreply, schedule_refresh(socket)}
 
   def handle_info({:passage_saved, _}, socket), do: {:noreply, schedule_refresh(socket)}
   def handle_info(:passages_pruned, socket), do: {:noreply, schedule_refresh(socket)}
@@ -221,9 +233,14 @@ defmodule SentinelWeb.VisitorCountingLive do
 
   defp load(%{mode: "range"} = filters, params, page, _, event_id) do
     query = Filters.query(filters)
+    metadata = camera_metadata(Monitoring.list_cameras(include_archived: true))
+    events = VisitorCounting.list_events(query, page)
 
     %{
-      events: VisitorCounting.list_events(query, page),
+      events: events,
+      more_images?: length(events) == 24,
+      metadata: metadata,
+      camera_ids: Map.keys(metadata),
       totals: VisitorCounting.totals(query),
       activity: %{bins: [], groups: [], group_count: 0, image_count: 0},
       event: VisitorCounting.get_event(event_id),
@@ -234,24 +251,59 @@ defmodule SentinelWeb.VisitorCountingLive do
   end
 
   defp load(filters, params, page, group_page, event_id) do
-    query = %{"camera_id" => filters.camera_id, "direction" => filters.direction}
+    eligible_ids = VisitorCounting.active_camera_ids()
+    metadata = camera_metadata(Monitoring.list_cameras(include_archived: true))
+
+    query = %{
+      "camera_id" => filters.camera_id,
+      "direction" => filters.direction,
+      "camera_ids" => eligible_ids
+    }
 
     with {:ok, activity} <- Timeline.activity(filters.day, query, group_page),
          {:ok, totals} <- Timeline.totals(filters.day, query) do
       {selection, resolved, notice?} = resolve_selection(filters.day, query, params)
-      {:ok, events} = Timeline.images(filters.day, query, selection, page)
+      image_page = if Map.has_key?(resolved, "page"), do: page, else: 1
+
+      {:ok, events, more_images?} =
+        Timeline.images_page(filters.day, query, selection, image_page)
+
+      resolved =
+        if image_page > 1 and events == [], do: Map.delete(resolved, "page"), else: resolved
+
+      resolved =
+        if group_page > 1 and activity.groups == [],
+          do: Map.delete(resolved, "group_page"),
+          else: resolved
 
       %{
         events: events,
         totals: totals,
         activity: activity,
-        event: VisitorCounting.get_event(event_id),
+        event: daily_event(event_id, filters, eligible_ids),
+        more_images?: more_images?,
+        metadata: metadata,
+        camera_ids: activity.camera_ids,
         params: resolved,
         selection: selection,
         notice?: notice?
       }
     end
   end
+
+  defp daily_event(event_id, filters, eligible_ids) do
+    with %{camera_id: id, direction: direction} = event <- VisitorCounting.get_event(event_id),
+         true <- id in eligible_ids,
+         true <- filters.camera_id in ["", id],
+         true <- filters.direction in ["", direction],
+         true <- filters.day == LocalTime.date(image_at(event)) do
+      event
+    else
+      _ -> nil
+    end
+  end
+
+  defp image_at(event), do: event.snapshot_received_at || event.crossed_at
 
   defp resolve_selection(day, query, %{"group" => id} = params) do
     with {id, ""} <- parse_integer(id),
@@ -314,28 +366,30 @@ defmodule SentinelWeb.VisitorCountingLive do
         query_error?: false,
         event: data.event,
         totals: data.totals,
-        count: length(events),
+        more_images?: data.more_images?,
+        camera_metadata: data.metadata,
+        camera_options:
+          camera_options(data.metadata, data.camera_ids, socket.assigns.filters.camera_id),
+        legend: legend(activity.bins, data.metadata),
+        now: DateTime.utc_now(),
         peak: Enum.reduce(activity.bins, 1, &max(&1.count, &2)),
         bins: activity.bins,
         group_count: activity.group_count,
         image_count: activity.image_count,
         selection: data.selection,
-        selection_notice?: data.notice?
+        selection_notice?: data.notice? or socket.assigns.selection_notice?
       )
       |> stream(:events, events, reset: true)
       |> stream(:groups, activity.groups, reset: true)
 
     socket =
-      cond do
-        data.params != socket.assigns.url_params ->
-          push_patch(socket,
+      if data.params != socket.assigns.url_params,
+        do:
+          push_patch(assign(socket, :url_params, data.params),
             to: history_path(data.params, socket.assigns.event_id),
             replace: true
-          )
-
-        true ->
-          socket
-      end
+          ),
+        else: socket
 
     {:noreply, socket}
   end
@@ -366,12 +420,7 @@ defmodule SentinelWeb.VisitorCountingLive do
   defp page(_), do: 1
 
   defp history_path(params, event_id \\ nil) do
-    base =
-      cond do
-        event_id -> "/visitors/events/#{event_id}"
-        true -> "/visitors"
-      end
-
+    base = if event_id, do: "/visitors/events/#{event_id}", else: "/visitors"
     base <> "?" <> URI.encode_query(Map.filter(params, fn {_, value} -> is_binary(value) end))
   end
 
@@ -396,16 +445,20 @@ defmodule SentinelWeb.VisitorCountingLive do
 
   attr :event, :any, required: true
   attr :detail, :boolean, default: false
+  attr :relative, :boolean, default: false
 
   defp snapshot_provenance(assigns) do
     ~H"""
     <div
-      id={"snapshot-provenance-#{snapshot_location(@detail)}-#{@event.id}"}
+      id={"snapshot-provenance-#{if @detail, do: "detail", else: "card"}-#{@event.id}"}
       class="mt-3 text-xs leading-5 text-slate-400"
     >
       <span class={[
         "inline-flex rounded-md border px-2 py-0.5 font-medium",
-        snapshot_class(@event.snapshot_quality)
+        if(@event.snapshot_quality == "primary",
+          do: "border-teal-300/30 text-teal-200",
+          else: "border-slate-600 text-slate-300"
+        )
       ]}>
         {case @event.snapshot_quality do
           "primary" -> "Primaria · cuadro completo"
@@ -418,7 +471,7 @@ defmodule SentinelWeb.VisitorCountingLive do
         Motivo: {fallback_label(@event.snapshot_fallback_reason)}
       </p>
       <p :if={@detail}>Cruce: {Sentinel.LocalTime.format(@event.crossed_at)} CST</p>
-      <p :if={@event.snapshot_received_at}>
+      <p :if={!@relative and @event.snapshot_received_at}>
         Imagen recibida: {Sentinel.LocalTime.format(@event.snapshot_received_at)} CST
       </p>
       <p :if={!@event.snapshot_received_at}>Hora de recepción y dimensiones desconocidas.</p>
@@ -431,19 +484,6 @@ defmodule SentinelWeb.VisitorCountingLive do
     </div>
     """
   end
-
-  defp current_mode(mode, mode), do: "page"
-  defp current_mode(_mode, _other), do: nil
-  defp bin_color(0), do: "bg-slate-700"
-  defp bin_color(_count), do: "bg-teal-300"
-  defp group_class(true), do: "border-teal-300 bg-teal-300/10"
-  defp group_class(false), do: "border-white/10"
-  defp direction_label("entry"), do: "Entrada"
-  defp direction_label(_direction), do: "Salida"
-  defp snapshot_location(true), do: "detail"
-  defp snapshot_location(false), do: "card"
-  defp snapshot_class("primary"), do: "border-teal-300/30 text-teal-200"
-  defp snapshot_class(_quality), do: "border-slate-600 text-slate-300"
 
   defp fallback_label(reason) do
     Map.get(

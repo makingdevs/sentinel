@@ -189,13 +189,14 @@ defmodule Sentinel.Monitoring do
     end
   end
 
-  def list_cameras do
-    Repo.all(
+  def list_cameras(opts \\ []) do
+    query =
       from c in Camera,
-        where: is_nil(c.archived_at),
         order_by: c.id,
         select: %{id: c.id, branch: c.branch, label: c.label, color: c.color}
-    )
+
+    query = if opts[:include_archived], do: query, else: where(query, [c], is_nil(c.archived_at))
+    Repo.all(query)
   rescue
     _ in [Postgrex.Error, DBConnection.ConnectionError] -> []
   end

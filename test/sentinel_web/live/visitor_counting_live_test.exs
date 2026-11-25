@@ -1,5 +1,5 @@
 defmodule SentinelWeb.VisitorCountingLiveTest do
-  use SentinelWeb.ConnCase, async: true
+  use SentinelWeb.ConnCase, async: false
   import Sentinel.MonitoringFixtures
   setup :camera_catalog_fixture_setup
 
@@ -10,6 +10,50 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
   alias Sentinel.Monitoring.Camera
   import Phoenix.LiveViewTest
   alias Sentinel.VisitorCounting
+  alias Sentinel.VisitorCounting.Manager
+
+  setup context do
+    if context[:daily] do
+      config = Application.fetch_env!(:sentinel, :visitor_counting)
+
+      Application.put_env(
+        :sentinel,
+        :visitor_counting,
+        Keyword.put(config, :pipeline_module, Sentinel.TestMediaPipeline)
+      )
+
+      Application.put_env(:sentinel, :media_test_owner, self())
+
+      on_exit(fn ->
+        Application.put_env(:sentinel, :visitor_counting, config)
+        Application.delete_env(:sentinel, :media_test_owner)
+      end)
+
+      start_supervised!(
+        {DynamicSupervisor, name: Sentinel.TestMediaSupervisor, strategy: :one_for_one}
+      )
+
+      for id <- ~w(division-1 division-2) do
+        camera_source_fixture(id, "secundaria", "rtsp://example.test/#{id}")
+        assert {:ok, _} = VisitorCounting.configure_rule(id, %{enabled: true})
+      end
+
+      start_supervised!({Manager, max_cameras: 2})
+
+      pipelines =
+        for id <- ~w(division-1 division-2), into: %{} do
+          assert_receive {:media_started, pipeline, %{owner: owner, rule: %{camera_id: ^id}}}
+          send(owner, {:analytics_status, pipeline, :active})
+          _ = :sys.get_state(owner)
+          assert Manager.status(id) == :active
+          {id, {owner, pipeline}}
+        end
+
+      {:ok, pipelines: pipelines}
+    else
+      :ok
+    end
+  end
 
   test "mode navigation marks only the selected mode", %{conn: conn} do
     {:ok, view, _} = live(conn, "/visitors?mode=range")
@@ -80,6 +124,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert {:error, {:redirect, %{to: "/cameras"}}} = live(conn, ~p"/visitors")
   end
 
+  @tag :daily
   test "open history updates channel colors while preserving filters and detail", %{conn: conn} do
     capture = event("entry", "division-1", 1, ~U[2026-11-19 12:00:00.000000Z])
 
@@ -115,6 +160,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert has_element?(view, "#visitor-close-detail[href*='camera_id=division-1']")
   end
 
+  @tag :daily
   test "daily groups and bins retain URL context through detail and pagination", %{conn: conn} do
     first = event("entry", "division-1", 1, ~U[2026-11-19 12:00:00.000000Z])
 
@@ -132,6 +178,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert has_element?(view, "#daily-timeline")
     assert has_element?(view, "#density-bin-0[aria-label]")
     assert has_element?(view, "#density-bin-287")
+    assert has_element?(view, "#timeline-camera-division-1", "30 imágenes")
     assert has_element?(view, "#visitor-groups-next:not([disabled])")
     view |> element("#visitor-groups-next") |> render_click()
     render_async(view)
@@ -162,6 +209,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert has_element?(view, "#visitor-next:not([disabled])")
   end
 
+  @tag :daily
   test "catalog changes refresh daily labels without changing active URL filters", %{conn: conn} do
     saved = event("entry", "division-1", 1, ~U[2026-11-19 12:00:00.000000Z])
     day = Date.to_iso8601(DateTime.to_date(saved.crossed_at))
@@ -180,6 +228,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert has_element?(view, "#visitor-filters")
   end
 
+  @tag :daily
   test "coalesces bursts and reconciles a deleted selected group without new crossings", %{
     conn: conn
   } do
@@ -205,6 +254,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert has_element?(view, "#daily-timeline")
   end
 
+  @tag :daily
   test "malformed selection and URL values preserve a safe page", %{conn: conn} do
     saved = event("entry", "division-1", 1)
 
@@ -256,6 +306,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert has_element?(view, "#snapshot-provenance-detail-#{primary.id}", "sin recuadro")
   end
 
+  @tag :daily
   test "rapid URL changes keep only the current camera query result", %{conn: conn} do
     first = event("entry", "division-1", 1)
     second = event("exit", "division-2", 2)
@@ -269,6 +320,7 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
     assert has_element?(view, "#visitor-filters select option[value='division-1'][selected]")
   end
 
+  @tag :daily
   test "list and map selection params fall back to the full day", %{conn: conn} do
     saved = event("entry", "division-1", 1)
 
@@ -279,6 +331,71 @@ defmodule SentinelWeb.VisitorCountingLiveTest do
       assert has_element?(view, "#passage-link-#{saved.id}")
       refute has_element?(view, "#visitor-query-error")
     end
+  end
+
+  @tag :daily
+  test "daily removes a stopped camera from every result and preserves its range history", %{
+    conn: conn,
+    pipelines: pipelines
+  } do
+    active = event("entry", "division-1", 1)
+    stopped = event("entry", "lavirgen-1", 2)
+    day = Sentinel.LocalTime.today()
+    {:ok, view, _} = live(conn, "/visitors?mode=daily&day=#{day}&direction=entry")
+    render_async(view)
+
+    assert has_element?(view, "#timeline-camera-division-1", "División · Cámara 1")
+    assert has_element?(view, "#entry-total dd", "1")
+    assert has_element?(view, "#exit-total dd", "0")
+    assert has_element?(view, "#visitor-group-#{active.id} time")
+    assert has_element?(view, "#passage-link-#{active.id} time")
+
+    for id <- ~w(lavirgen-1 division-2) do
+      refute has_element?(view, "#timeline-camera-#{id}")
+      refute has_element?(view, "#visitor-filters option[value='#{id}']")
+    end
+
+    refute has_element?(view, "#visitor-group-#{stopped.id}")
+    refute has_element?(view, "#passage-link-#{stopped.id}")
+
+    exit = event("exit", "division-2", 3)
+    saved = event("entry", "division-2", 4)
+    Phoenix.PubSub.broadcast(Sentinel.PubSub, "visitor_events", {:passage_saved, saved.id})
+    flush_refresh(view)
+    assert has_element?(view, "#timeline-camera-division-2")
+    assert has_element?(view, "#entry-total dd", "2")
+    refute has_element?(view, "#passage-link-#{exit.id}")
+
+    render_patch(view, "/visitors?mode=daily&day=#{day}&camera_id=division-1&group=#{active.id}")
+    render_async(view)
+    render_async(view)
+    assert has_element?(view, "#visitor-reset-selection")
+
+    {owner, pipeline} = Map.fetch!(pipelines, "division-1")
+    send(owner, {:analytics_status, pipeline, :loading})
+    _ = :sys.get_state(owner)
+    assert Manager.status("division-1") == :loading
+    flush_refresh(view)
+    render_async(view)
+    assert has_element?(view, "#visitor-selection-notice")
+    assert has_element?(view, "#visitor-filters option[value='division-1'][selected]")
+    assert has_element?(view, "#visitor-groups-empty", "La cámara seleccionada")
+    assert has_element?(view, "#entry-total dd", "0")
+    assert has_element?(view, "#visitor-next[disabled]")
+    refute has_element?(view, "#timeline-camera-legend")
+    refute has_element?(view, "#visitor-reset-selection")
+    refute has_element?(view, "#passage-link-#{active.id}")
+
+    view |> element("#visitor-mode-range") |> render_click()
+    render_async(view)
+    assert has_element?(view, "#passage-link-#{active.id}")
+    assert has_element?(view, "#entry-total dd", "1")
+  end
+
+  defp flush_refresh(view) do
+    {_, token} = :sys.get_state(view.pid).socket.assigns.refresh_timer
+    send(view.pid, {:refresh, token})
+    render_async(view)
   end
 
   defp event(direction, camera, number, crossed_at \\ DateTime.utc_now()) do

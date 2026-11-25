@@ -11,6 +11,17 @@ defmodule Sentinel.VisitorCounting do
   def list_rules, do: Repo.all(from r in Rule, order_by: r.camera_id)
   def enabled_rules, do: Repo.all(from r in Rule, where: r.enabled, order_by: r.camera_id)
 
+  def active_camera_ids do
+    Repo.all(
+      from r in Rule,
+        join: camera in Sentinel.Monitoring.Camera,
+        on: camera.id == r.camera_id,
+        where: r.enabled and is_nil(camera.archived_at),
+        select: r.camera_id
+    )
+    |> Enum.filter(&(Sentinel.VisitorCounting.Manager.status(&1) == :active))
+  end
+
   def change_rule(camera_id, attrs \\ %{}) do
     (get_rule(camera_id) || %Rule{camera_id: camera_id}) |> Rule.changeset(attrs)
   end
