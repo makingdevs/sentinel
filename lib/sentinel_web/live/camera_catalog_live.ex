@@ -1,7 +1,7 @@
 defmodule SentinelWeb.CameraCatalogLive do
   use SentinelWeb, :live_view
 
-  alias Sentinel.Monitoring
+  alias Sentinel.{LocalTime, Monitoring}
   alias Sentinel.Monitoring.Camera
 
   @impl true
@@ -15,7 +15,7 @@ defmodule SentinelWeb.CameraCatalogLive do
      |> assign(:colors, Camera.colors())
      |> assign(:form, camera_form(%Camera{}))
      |> assign(:editing_id, nil)
-     |> assign(:cameras, Monitoring.admin_cameras())}
+     |> refresh()}
   end
 
   defp subscribe(false), do: :ok
@@ -36,7 +36,9 @@ defmodule SentinelWeb.CameraCatalogLive do
   def handle_info({:visitor_status, _id, _status}, socket), do: {:noreply, refresh(socket)}
   def handle_info({:passage_saved, _id}, socket), do: {:noreply, refresh(socket)}
   def handle_info({:camera_changed, _id}, socket), do: {:noreply, refresh(socket)}
-  defp refresh(socket), do: assign(socket, :cameras, Monitoring.admin_cameras())
+
+  defp refresh(socket),
+    do: assign(socket, cameras: Monitoring.admin_cameras(), now: DateTime.utc_now())
 
   @impl true
   def handle_event("edit", %{"id" => id}, socket) do

@@ -1,18 +1,12 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
-  <div>
-    <.section_header
-      id="catalog-heading"
-      section="Configuración local"
-      title="Catálogo de canales"
-    >
-      <:actions>
-        <.link
-          id="catalog-back-cameras"
-          navigate={~p"/cameras"}
-          class="rounded-lg px-4 py-2 text-sm text-teal-300 hover:bg-teal-300/10"
-        >Volver a cámaras</.link>
-      </:actions>
-    </.section_header>
+  <main class="mx-auto max-w-5xl px-5 py-10">
+    <header class="mb-8 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-sm text-teal-300">Sentinel · Configuración local</p>
+        <h1 class="mt-2 text-3xl font-semibold">Catálogo de canales</h1>
+      </div>
+      <.link navigate={~p"/cameras"} class="text-sm text-teal-200">Volver a cámaras</.link>
+    </header>
 
     <.form
       for={@form}
@@ -21,8 +15,12 @@
       phx-submit="save"
       class="mb-10 grid gap-4 rounded-2xl border border-white/10 bg-slate-900 p-6 sm:grid-cols-2"
     >
-      <h2 class="sm:col-span-2 text-lg font-semibold">
-        {editor_title(@editing_id)}
+      <h2
+        id="camera-catalog-heading"
+        tabindex="-1"
+        class="scroll-mt-6 text-lg font-semibold sm:col-span-2"
+      >
+        {if @editing_id, do: "Editar canal", else: "Nuevo canal"}
       </h2>
       <.input field={@form[:id]} label="ID estable" readonly={!!@editing_id} />
       <.input field={@form[:branch]} id="catalog-camera-branch" label="Sucursal" />
@@ -45,11 +43,9 @@
         autocomplete="new-password"
         label="RTSP secundaria (vacío conserva el valor)"
       />
-      <div class="sm:col-span-2 flex flex-wrap gap-3">
+      <div class="sm:col-span-2 flex gap-3">
         <button
           id="save-camera"
-          type="submit"
-          phx-disable-with="Guardando…"
           class="rounded-lg bg-teal-300 px-4 py-2 font-medium text-slate-950"
         >Guardar canal</button>
         <button
@@ -67,22 +63,34 @@
         id={"catalog-camera-#{entry.camera.id}"}
         class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900 p-4"
       >
-        <div class="flex min-w-0 items-center gap-3 break-words">
+        <div class="flex items-center gap-3">
           <div>
-            <p class="font-medium">
+            <p class="flex flex-wrap items-baseline gap-x-3 font-medium">
               <.channel_label color={entry.camera.color}>
-                {entry.camera.label} · {entry.camera.id}
+                {entry.camera.label}
               </.channel_label>
+              <span id={"catalog-branch-#{entry.camera.id}"} class="text-sm text-slate-300">{entry.camera.branch}</span>
+              <span class="text-xs font-normal text-slate-400">{entry.camera.id}</span>
             </p>
             <p class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span class={counting_badge_class(entry)}>{counting_text(entry)}</span>
-              <span>Última captura {last_capture_text(entry.last_capture)}</span>
+              <span :if={entry.last_capture}>
+                Última captura
+                <time
+                  datetime={DateTime.to_iso8601(entry.last_capture)}
+                  title={LocalTime.format(entry.last_capture) <> " CST"}
+                >
+                  {LocalTime.relative(entry.last_capture, @now)}
+                </time>
+              </span>
+              <span :if={!entry.last_capture}>Sin captura persistida</span>
             </p>
             <p class="text-sm text-slate-400">
-              {entry.camera.branch} · Principal {source_text(entry.sources, "principal")} · Secundaria {source_text(
-                entry.sources,
-                "secundaria"
-              )}
+              Principal {if "principal" in entry.sources,
+                do: "configurada",
+                else: "ausente"} · Secundaria {if "secundaria" in entry.sources,
+                do: "configurada",
+                else: "ausente"}
             </p>
           </div>
           <span :if={entry.camera.archived_at} class="text-xs text-amber-300">Archivada</span>
@@ -91,7 +99,7 @@
           <button
             :if={!entry.camera.archived_at}
             id={"edit-camera-#{entry.camera.id}"}
-            phx-click={JS.push("edit") |> JS.focus(to: "#catalog-camera-branch")}
+            phx-click={JS.push("edit") |> JS.focus(to: "#camera-catalog-heading")}
             phx-value-id={entry.camera.id}
             class="rounded-lg border border-white/10 px-3 py-2 text-sm"
           >Editar</button>
@@ -111,5 +119,5 @@
         </div>
       </article>
     </section>
-  </div>
+  </main>
 </Layouts.app>

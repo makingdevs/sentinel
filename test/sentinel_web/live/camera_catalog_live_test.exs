@@ -79,6 +79,28 @@ defmodule SentinelWeb.CameraCatalogLiveTest do
     assert is_nil(Repo.get!(Camera, "division-1").archived_at)
   end
 
+  test "switching edit targets loads each saved branch and preserves it on save", %{conn: conn} do
+    Repo.insert!(%Camera{id: "division-1", branch: "División", label: "Entrada"})
+    Repo.insert!(%Camera{id: "lavirgen-1", branch: "La Virgen", label: "Entrada"})
+
+    {:ok, view, _} = live(conn, ~p"/cameras/catalog")
+    assert has_element?(view, "#catalog-branch-division-1", "División")
+    assert has_element?(view, "#catalog-branch-lavirgen-1", "La Virgen")
+
+    view |> element("#edit-camera-division-1") |> render_click()
+    assert has_element?(view, "#camera-catalog-heading[tabindex='-1']", "Editar canal")
+    assert has_element?(view, "#catalog-camera-branch[value='División']")
+
+    view |> element("#edit-camera-lavirgen-1") |> render_click()
+    assert has_element?(view, "#catalog-camera-branch[value='La Virgen']")
+
+    view
+    |> form("#camera-catalog-form", camera: %{label: "Entrada norte"})
+    |> render_submit()
+
+    assert %{branch: "La Virgen", label: "Entrada norte"} = Repo.get!(Camera, "lavirgen-1")
+  end
+
   test "catalog shows persisted latest capture per channel", %{conn: conn} do
     Repo.insert!(%Camera{id: "division-1", branch: "División", label: "Cámara 1"})
     {:ok, view, _html} = live(conn, ~p"/cameras/catalog")
@@ -111,6 +133,8 @@ defmodule SentinelWeb.CameraCatalogLiveTest do
     Phoenix.PubSub.broadcast(Sentinel.PubSub, "visitor_events", {:passage_saved, event.id})
     assert has_element?(view, "#camera-catalog-form input[value='Edición sin guardar']")
     assert has_element?(view, "#catalog-camera-division-1 .rounded-full", "Deshabilitado")
-    assert has_element?(view, "#catalog-camera-division-1", "06:00:05 CST")
+    assert has_element?(view, "#catalog-camera-division-1 time[title$='06:00:05 CST']")
+    expected = Sentinel.LocalTime.relative(event.snapshot_received_at, DateTime.utc_now())
+    assert has_element?(view, "#catalog-camera-division-1 time", expected)
   end
 end
